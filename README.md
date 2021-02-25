@@ -1,4 +1,3 @@
 # PhD-bedbugs
 
-![plot](/Users/chloe/Documents/bedbugs.png)
-
+![Image 1](https://github.com/chaberko-lbbe/bedbugs.png)
