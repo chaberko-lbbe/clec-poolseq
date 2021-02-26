@@ -12,6 +12,12 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Mapping](#Mapping)
 	- [Analysing coverage](#Analysing-coverage)
 
+- **[Genetic differenciation of populations](#Genetic-differenciation-of-populations)**
+	- [Install tools](#Install-tools)
+	- [Detecting SNPs](#Detecting-SNPs)
+	- [Compute FST](#Compute-FST)
+	- [Genetic polymorphism](#Genetic-polymorphism)
+
 ## Mapping and processing Pool-seq genomes
 
 The goal is first to map *Cimex lectularius* PoolSeq samples on reference genome : London Lab, London Field, German Lab, Sweden Field (pools of 30 individuals).
