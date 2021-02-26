@@ -206,7 +206,7 @@ rm GL_mapped.bam
 Calculer les couvertures par base (combien de reads mappent à une position du genome de reference = 1 NT)
 Pour uniquement les reads mappes (-F 4 ; mapped_sorted) 
 
-```{bash}
+```
 nano cov_SF_mapped_sorted.sh
 
 #!/bin/bash
@@ -220,7 +220,7 @@ nano cov_SF_mapped_sorted.sh
 /beegfs/data/chaberkorn/Tools/bedtools2/bin/bedtools genomecov -ibam SF_mapped_sorted.bam -d > SF_cov.txt
 ```
 
-Then, analysing on R:
+Then, we analyse them on R:
 
 ```
 # Open R on the cluster: /beegfs/data/soft/R-3.5.2/bin/R
@@ -229,88 +229,73 @@ map_SF=read.table("SF_cov_map.txt")
 head(map_SF)
 summary(map_SF$V3)
 
-
-
-
-
-
-
-
-
-
-# Cree une colonne supplementaire avec l'ordre de V1 
+# Create an additional column with the order of V1:
 order <- seq(1:length(map_SF$V1))
 map_SF$order <- order
 head(map_SF)
-# Aggregate : moyenne de la colonne Y en fonction de X
-map_SF_1 <- aggregate(V3~V1,data=map_SF,FUN=mean)
-# Faire la moyenne de la colonne 'order'
-map_SF_agg <- aggregate(order~V1, data=map_SF,FUN=mean)
-# Ajouter la colonne des moyennes des 'order' au dataframe
+
+map_SF_1 <- aggregate(V3~V1,data=map_SF,FUN=mean) # Aggregate with the mean of the Y column depending on X
+map_SF_agg <- aggregate(order~V1, data=map_SF,FUN=mean) # Mean of column 'order'
 map_SF <- map_SF_1
-map_SF$order <- map_SF_agg$order
-# Ordonner le dataframe en fonction des moyennes des 'order'   
-map_SF <- map_SF[order(map_SF$order),]
+map_SF$order <- map_SF_agg$order # Add this column to data frame
+map_SF <- map_SF[order(map_SF$order),] # Order the dataframe according to the averages of the 'order'
 head(map_SF)
 
-# Combien de scaffold avec couverure de 0 :
+# How many scaffold with coverage=0 ?
 cov_SF_null <- subset(map_SF,  map_SF$V3 == 0,)
 
-# Sauvegarder le fichier sur le cluster :
 write.table(map_SF, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_scaff_SF.txt")
 
 map_GL_q=read.table("GL_cov_qual.txt")
 
-# setdiff(x,y) trouve les elements de x (le plus grand = map_GL) qui ne sont pas dans y (map_GL_q)
-
-# Essayer de voir les bases couvertes differemment entre les deux fichiers :
-test_GL <- setdiff(map_GL, map_GL_q)
+# Try to find the basis differencialy covered between the two files :
+test_GL <- setdiff(map_GL, map_GL_q) # find elements in x (the bigger file = map_GL) that are not in y (map_GL_q)
 
 write.table(map_GL_q, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_scaff_GL_qual.txt")
 ```
 
-Representer les couvertures :
+Represent coverages on R:
 
-```{r}
+```
 library(ggplot2)
 
-map_GL_a <- map_GL[1:500, ]
-map_GL_b <- map_GL[501:1000, ]
-map_GL_c <- map_GL[1001:1575, ]
-map_GL_test <- subset(map_GL, V3=8032)
+head(map_scaff_GL)
 
-p <- ggplot(map_GL, aes(x=V1,y=V3)) + geom_density() + theme_classic()
+GL_highcov <- map_scaff_GL[ which(map_scaff_GL$scaffold=='NW_019392715.1' | map_scaff_GL$scaffold=='NW_019392726.1' | map_scaff_GL$scaffold=='NW_019392782.1' | map_scaff_GL$scaffold=='NW_019392787.1' | map_scaff_GL$scaffold=='NW_019392930.1' |  map_scaff_GL$scaffold=='NW_019393765.1' | map_scaff_GL$scaffold=='NW_019393885.1' | map_scaff_GL$scaffold=='NC_030043.1'),]
 
-p <- ggplot(map_GL, aes(x=V1,y=V3)) + geom_col() + theme_classic()
-p + theme(axis.text.x = element_blank()) + scale_x_discrete(name="Scaffold 1-1574") + scale_y_continuous(name="Couverture moyenne", limits=c(0,8050)) #max = 1227
+plot(map_scaff_GL$scaffold, map_scaff_GL$mean_cov, pch =2, cex = 3, xaxt="n",
+     xlab="Scaffold", ylab="Average coverage", 
+     main ="")#, ylim=c(0,100))
 
-a <- ggplot(map_GL_a, aes(x=V1,y=V3)) + geom_col() + theme_classic()
-a + theme(axis.text.x = element_blank()) + scale_x_discrete(name="Scaffold 1-500") + scale_y_continuous(name="Couverture moyenne", limits=c(0,1300)) #max = 1227
+#abline(h = (quantile(map_scaff_GL$V3, probs = seq(0.995,1, 0.01), na.rm = T)), col= "grey40", lty=1)
+points(map_scaff_GL$scaffold, map_scaff_GL$mean_cov, pch = 20, cex = 0.8)
+points(map_scaff_LF$scaffold, map_scaff_LF$mean_cov, pch = 2, cex = 0.8, col="red")
+points(map_scaff_SF$scaffold, map_scaff_SF$mean_cov, pch = 4, cex = 0.8, col="darkgreen")
+points(map_scaff_LL$scaffold, map_scaff_LL$mean_cov, pch = 18, cex = 0.8, col="blue")
 
-b <- ggplot(map_GL_b, aes(x=V1,y=V3)) + geom_col() + theme_classic()
-b + theme(axis.text.x = element_blank()) + scale_x_discrete(name="Scaffold 501-1000") + scale_y_continuous(name="Couverture moyenne", limits=c(0,300)) #max =222
-
-c <- ggplot(map_GL_c, aes(x=V1,y=V3)) + geom_col() + theme_classic()
-c + theme(axis.text.x = element_blank()) + scale_x_discrete(name="Scaffold 1000-1574") + scale_y_continuous(name="Couverture moyenne", limits=c(0,8050)) #max =8032
+legend("topright", legend=c("German Lab", "London Field", "Sweden Field", "London Lab"), pch=c(20,2,4,18),
+       col=c("black","red","darkgreen","blue"), cex=0.8, box.lty=1)
 ```
 
-Calculer les longeurs des scaffolds :
 
-```{r}
+
+
+
+
+Compute scaffold lengths:
+
+```
 map_LL=read.table("LL_cov_map.txt")
 length_LL <- aggregate(V2~V1,FUN=length, data=map_LL)
 write.table(length_LL, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/length_scaff_LL.txt")
 
-# Merge les tables et reordonner par colonne order
+# Merge tables and reorder by 'order' column:
 map_LL=read.table("map_scaff_LL.txt")
 length_LL=read.table("length_scaff_LL.txt")
 map_length_LL <- merge(length_LL,map_LL, by.x="V1", by.y="V1")
 colnames(map_length_LL) <- c("scaffold","length","mean_cov","order") 
 map_length_LL <- map_length_LL[order(map_length_LL$order),]
 write.table(map_length_LL, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_scaff_LL.txt")
-
-# Order plot via decrease size
-
 ```
 
 Analyser les hautes couvertures :
