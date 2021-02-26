@@ -16,7 +16,7 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Install tools](#Install-tools)
 	- [Detecting SNPs](#Detecting-SNPs)
 	- [Compute FST](#Compute-FST)
-	- [Genetic polymorphism](#Genetic-polymorphism)
+	- [Estimate genetic polymorphism](#Estimate-genetic-polymorphism)
 
 ## Mapping and processing Pool-seq genomes
 
