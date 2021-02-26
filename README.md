@@ -244,6 +244,24 @@ test_GL <- setdiff(map_GL, map_GL_q) # find elements in x (the bigger file = map
 write.table(map_GL_q, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_scaff_GL_qual.txt")
 ```
 
+Compute scaffold lengths:
+
+```
+map_LL=read.table("LL_cov_map.txt")
+length_LL <- aggregate(V2~V1,FUN=length, data=map_LL)
+write.table(length_LL, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/length_scaff_LL.txt")
+
+# Merge tables and reorder by 'order' column:
+map_LL=read.table("map_scaff_LL.txt")
+length_LL=read.table("length_scaff_LL.txt")
+map_length_LL <- merge(length_LL,map_LL, by.x="V1", by.y="V1")
+colnames(map_length_LL) <- c("scaffold","length","mean_cov","order") 
+map_length_LL <- map_length_LL[order(map_length_LL$order),]
+write.table(map_length_LL, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_scaff_LL.txt")
+```
+
+
+
 Represent coverages on R:
 
 ```
@@ -279,27 +297,26 @@ legend("topleft", legend=c("German Lab", "London Field", "Sweden Field", "London
 ```
 
 ![Image 2](order_genome.png)
-![Image 3](order_genome_zoom_pic.png)
+
+Summary for each population :
+
+SF
+Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.22   17.08   23.84   19.25 5487.09 
+
+LF
+Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+0.00   11.64   19.48   29.61   21.66 5963.07 
+
+LL
+Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+0.000    9.524   16.309   22.569   18.300 3986.625 
+
+GL
+Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+0.00   15.04   25.21   37.73   28.02 8126.32 
 
 
-
-
-
-Compute scaffold lengths:
-
-```
-map_LL=read.table("LL_cov_map.txt")
-length_LL <- aggregate(V2~V1,FUN=length, data=map_LL)
-write.table(length_LL, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/length_scaff_LL.txt")
-
-# Merge tables and reorder by 'order' column:
-map_LL=read.table("map_scaff_LL.txt")
-length_LL=read.table("length_scaff_LL.txt")
-map_length_LL <- merge(length_LL,map_LL, by.x="V1", by.y="V1")
-colnames(map_length_LL) <- c("scaffold","length","mean_cov","order") 
-map_length_LL <- map_length_LL[order(map_length_LL$order),]
-write.table(map_length_LL, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_scaff_LL.txt")
-```
 
 Analyser les hautes couvertures :
 
