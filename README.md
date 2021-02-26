@@ -260,8 +260,6 @@ map_length_LL <- map_length_LL[order(map_length_LL$order),]
 write.table(map_length_LL, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_scaff_LL.txt")
 ```
 
-
-
 Represent coverages on R:
 
 ```
@@ -273,10 +271,6 @@ map_scaff_LF=read.table("map_scaff_LF.txt")
 map_scaff_SF=read.table("map_scaff_SF.txt")
 
 library(ggplot2)
-
-head(map_scaff_GL)
-
-GL_highcov <- map_scaff_GL[ which(map_scaff_GL$scaffold=='NW_019392715.1' | map_scaff_GL$scaffold=='NW_019392726.1' | map_scaff_GL$scaffold=='NW_019392782.1' | map_scaff_GL$scaffold=='NW_019392787.1' | map_scaff_GL$scaffold=='NW_019392930.1' |  map_scaff_GL$scaffold=='NW_019393765.1' | map_scaff_GL$scaffold=='NW_019393885.1' | map_scaff_GL$scaffold=='NC_030043.1'),]
 
 map_scaff_GL$X <- 1:length(map_scaff_GL$scaffold)
 map_scaff_LL$X <- 1:length(map_scaff_LL$scaffold)
@@ -296,8 +290,6 @@ legend("topleft", legend=c("German Lab", "London Field", "Sweden Field", "London
        col=c("black","red","darkgreen","blue"), cex=0.8, box.lty=1)
 ```
 
-![Image 2](order_genome.png)
-
 Summary for each population :
 
 SF
@@ -316,77 +308,49 @@ GL
 Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 0.00   15.04   25.21   37.73   28.02 8126.32 
 
+![Image 2](order_length.png)
 
-
-Analyser les hautes couvertures :
+As we can see, scaffold with extremely high mean coverage aren't the longer ones. Let's analyse it deeper:
 
 ```{r}
 map_SF=read.table("map_scaff_SF.txt")
-
-pvec <- seq(0,1,0.1)
-quantile(map_SF$V3, pvec)
 pvec <- seq(0.9,1,0.01)
 quantile(map_SF$V3, pvec)
 map_SF_highcov <- map_SF[map_SF$V3 > quantile(map_SF$V3, 0.99), ]
 
 write.table(map_SF_highcov, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_scaff_SF_highcov.txt")
 
-# On veut extraire les scaffold ayant une haute couverture du tableau global (seuil 0.99):
+# Extraction of scaffold with high coverage (threshold 0.99) : 
 
 map_SF=read.table("SF_cov_map.txt")
-
 map_SF_highcov <- map_SF[ which(map_SF$V1=='NW_019392706.1' | map_SF$V1=='NW_019392715.1' | map_SF$V1=='NW_019392726.1' | map_SF$V1=='NW_019392782.1' | map_SF$V1=='NW_019392787.1' | map_SF$V1=='NW_019392930.1' | map_SF$V1=='NW_019393092.1' | map_SF$V1=='NW_019393097.1' | map_SF$V1=='NW_019393543.1' | map_SF$V1=='NW_019393765.1' | map_SF$V1=='NW_019393885.1' | map_SF$V1=='NW_019393980.1' | map_SF$V1=='NW_019394066.1' | map_SF$V1=='NW_019394087.1' | map_SF$V1=='NW_019394151.1' | map_SF$V1=='NC_030043.1'),]
 write.table(map_SF_highcov, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_SF_highcov.txt")
 
-# Seuil 0.995 :
+# Threshold 0.995 :
 map_SF_highcov <- map_SF[ which(map_SF$V1=='NW_019393765.1' | map_SF$V1=='NW_019393885.1' | map_SF$V1=='NW_019392930.1' | map_SF$V1=='NW_019392787.1' |  map_SF$V1=='NW_019392782.1' | map_SF$V1=='NW_019392715.1' | map_SF$V1=='NW_019392726.1' |    map_SF$V1=='NC_030043.1'),]
-
-scaff_1 <- map_SF_highcov[ which(map_SF_highcov$V1=='NW_019392715.1'),]
 ```
 
-Regarder manuellement dans les scaffolds identifies au seuil 0.995 ou sont les couvertures >1000, et exporter ensuite les sequences de ces positions en les extrayant du genome de reference :
+Extract scaffold sequences identified at the 0.995 threshold from reference genome and Blast with our own database, including several bacterian genome (Wolbachia_cimex_genome, g-proteobacteria_genome, clostridium_genome):
 
-```{bash}
-/beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NW_019392715.1:376100-376700 > ref_NW_019392715.fai
-
-/beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NW_019392726.1:966100-980300 > ref_NW_019392726.fai
-
-/beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NW_019392782.1:1283600-1337700 > ref_NW_019392782.fai
-
-/beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NW_019392787.1:450700-450900 > ref_NW_019392787.fai
-
-/beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NW_019392930.1:195300-195600  > ref_NW_019392930.fai
-
-/beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NW_019393765.1:480-750 > ref_NW_019393765.fai
-
-/beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NW_019393885.1:160- > ref_NW_019393885.fai
-
-# Ou pour blaster :
-/beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NC_030043.1 > scaff_NC_030043.fa
 ```
+/beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NW_019392715.1 > scaff_NW_019392715.fa
 
-Utiliser Blast en ligne de commande en creeant notre propre base de donnes pour identifier la nature de ces scaffold hautement couverts :
-
-```{bash}
 cat mitochondion_cimex.fasta wolbachia_cimex_genome.fna g-proteobacteria_genome.fna clostridium_genome.fna /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna > data_cimex.fasta
 
 /beegfs/data/chaberkorn/Tools/myconda/bin/makeblastdb -in data_cimex.fasta -dbtype nucl -out data_cimex 
-# Output : 3 fichiers data_cimex.*
+# Output : 3 data_cimex.* file
 
-# Ou avec uniquement genome bacterien :
+# Blast also only with only bacterian genomes:
 
 cat wolbachia_cimex_genome.fna g-proteobacteria_genome.fna clostridium_genome.fna > data_bacteria.fasta
 
 /beegfs/data/chaberkorn/Tools/myconda/bin/makeblastdb -in data_bacteria.fasta -dbtype nucl -out data_bacteria 
-
-# Puis blaster :
-
 /beegfs/data/chaberkorn/Tools/myconda/bin/blastn -query /beegfs/data/chaberkorn/PoolSeq_Clec/Genomes/ref_NC_030043.fa -db data_cimex -out scaff_030043_vs_data_cimex.blastn -outfmt 6 -max_target_seqs 5 -evalue 10e-1
 ```
 
-Ouvrir "cimex_vs_data_TE.blastn" sur Excel, convertir en CSV
+Open "cimex_vs_data_TE.blastn" on Excel, convert in CSV:
 
-```{r}
+```
 data_TE <- read.csv("~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/cimex_vs_data_TE.blastn.csv", sep=";",h=F)
 colnames(data_TE) <- c("query_id","subject_id","identity","alignement_length","mismatches","gap_opens","qstart","qend","sstart","send","evalue","bitscore")
 
