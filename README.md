@@ -443,10 +443,27 @@ View(data_TE)
 
 
 
+](#Genetic-differenciation-of-populations)**
+	- [Install tools](#Install-tools)
+	- [Detecting SNPs](#Detecting-SNPs)
+	- [Compute FST](#Compute-FST)
+	- [Estimate genetic polymorphism](#Estimate-genetic-polymorphism
 
+## Genetic differenciation of populations
 
+The goal is to understand what differenciates the four strains of *Cimex lectularius* PoolSeq samples: London Lab, London Field, German Lab, Sweden Field.
 
+hypopthèse : certaines R/ d'autres S (donner infos site cimesxtore)
 
+We will have to download a few softs.
+
+### Install tools
+
+### Detecting SNPs
+
+### Compute FST
+
+### Estimate genetic polymorphism
 
 
 
