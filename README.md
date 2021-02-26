@@ -278,8 +278,8 @@ legend("topleft", legend=c("German Lab", "London Field", "Sweden Field", "London
        col=c("black","red","darkgreen","blue"), cex=0.8, box.lty=1)
 ```
 
-![Image 2](bedbugs.png)
-![Image 3](bedbugs.png)
+![Image 2](order_genome.png)
+![Image 3](order_genome_zoom_pic.png)
 
 
 
