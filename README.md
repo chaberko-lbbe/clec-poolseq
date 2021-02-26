@@ -10,17 +10,7 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Trimming](#Trimming)
 	- [Removing duplicates](#Removing-duplicates)
 	- [Mapping](#Mapping)
-	
-- **[Genome downloading and processing](#Genome-downloading-and-processing)**
-	- [Assembly descriptive statistics](#Assembly-descriptive-statistics )
-	- [BUSCO descriptive statistics](#BUSCO-descriptive-statistics )
-	- [Downloading databases](#Downloading-databases )
-	- [Purging of contaminating sequences](#Purging-of-contaminating-sequences )
-
-
-
-
-```/beegfs/data/soft/bioconda/bin/conda init```
+	- [Analysing coverage](#Analysing-coverage)
 
 ## Mapping and processing Pool-seq genomes
 
@@ -257,26 +247,39 @@ write.table(map_GL_q, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_
 Represent coverages on R:
 
 ```
+setwd("~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/Analyse coverage")
+
+map_scaff_GL=read.table("map_scaff_GL.txt")
+map_scaff_LL=read.table("map_scaff_LL.txt")
+map_scaff_LF=read.table("map_scaff_LF.txt")
+map_scaff_SF=read.table("map_scaff_SF.txt")
+
 library(ggplot2)
 
 head(map_scaff_GL)
 
 GL_highcov <- map_scaff_GL[ which(map_scaff_GL$scaffold=='NW_019392715.1' | map_scaff_GL$scaffold=='NW_019392726.1' | map_scaff_GL$scaffold=='NW_019392782.1' | map_scaff_GL$scaffold=='NW_019392787.1' | map_scaff_GL$scaffold=='NW_019392930.1' |  map_scaff_GL$scaffold=='NW_019393765.1' | map_scaff_GL$scaffold=='NW_019393885.1' | map_scaff_GL$scaffold=='NC_030043.1'),]
 
-plot(map_scaff_GL$scaffold, map_scaff_GL$mean_cov, pch =2, cex = 3, xaxt="n",
+map_scaff_GL$X <- 1:length(map_scaff_GL$scaffold)
+map_scaff_LL$X <- 1:length(map_scaff_LL$scaffold)
+map_scaff_LF$X <- 1:length(map_scaff_LF$scaffold)
+map_scaff_SF$X <- 1:length(map_scaff_SF$scaffold)
+
+plot(map_scaff_GL$X, map_scaff_GL$mean_cov, pch =20, cex = 0.8, xaxt="n",
      xlab="Scaffold", ylab="Average coverage", 
      main ="")#, ylim=c(0,100))
 
 #abline(h = (quantile(map_scaff_GL$V3, probs = seq(0.995,1, 0.01), na.rm = T)), col= "grey40", lty=1)
-points(map_scaff_GL$scaffold, map_scaff_GL$mean_cov, pch = 20, cex = 0.8)
-points(map_scaff_LF$scaffold, map_scaff_LF$mean_cov, pch = 2, cex = 0.8, col="red")
-points(map_scaff_SF$scaffold, map_scaff_SF$mean_cov, pch = 4, cex = 0.8, col="darkgreen")
-points(map_scaff_LL$scaffold, map_scaff_LL$mean_cov, pch = 18, cex = 0.8, col="blue")
+points(map_scaff_LF$X, map_scaff_LF$mean_cov, pch = 2, cex = 0.8, col="red")
+points(map_scaff_SF$X, map_scaff_SF$mean_cov, pch = 4, cex = 0.8, col="darkgreen")
+points(map_scaff_LL$X, map_scaff_LL$mean_cov, pch = 18, cex = 0.8, col="blue")
 
-legend("topright", legend=c("German Lab", "London Field", "Sweden Field", "London Lab"), pch=c(20,2,4,18),
+legend("topleft", legend=c("German Lab", "London Field", "Sweden Field", "London Lab"), pch=c(20,2,4,18),
        col=c("black","red","darkgreen","blue"), cex=0.8, box.lty=1)
 ```
 
+![Image 2](bedbugs.png)
+![Image 3](bedbugs.png)
 
 
 
