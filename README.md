@@ -484,6 +484,63 @@ pooldata_sub <- pooldata.subset(pooldata, pool.index = c(1,2,3,4), min.cov.per.p
 # With same parameters, 5 722 762 SNPs for 4 Pools, compared to 5 837 216 w/ PoPoolation2)
 ``` 
 
+Perform PCA:
+
+```
+# Build pcadapt matrix
+
+ref_GL <- pooldata_sub@refallele.readcount[,1]
+ref_LF <- pooldata_sub@refallele.readcount[,2]
+ref_SF <- pooldata_sub@refallele.readcount[,3]
+ref_LL <- pooldata_sub@refallele.readcount[,4]
+
+alt_GL <- pooldata_sub@readcoverage[,1] - pooldata_sub@refallele.readcount[,1]
+alt_LF <- pooldata_sub@readcoverage[,2] - pooldata_sub@refallele.readcount[,2]
+alt_SF <- pooldata_sub@readcoverage[,3] - pooldata_sub@refallele.readcount[,3]
+alt_LL <- pooldata_sub@readcoverage[,4] - pooldata_sub@refallele.readcount[,4]
+
+fq_GL <- ref_GL/pooldata_sub@readcoverage[,1]
+fq_LF <- ref_LF/pooldata_sub@readcoverage[,2]
+fq_SF <- ref_SF/pooldata_sub@readcoverage[,3]
+fq_LL <- ref_LL/pooldata_sub@readcoverage[,4]
+
+# Different (?) from : SNP_biall$fq_SF <- ifelse(SNP_biall$ref==SNP_biall$SF1, SNP_biall$SF_ref/SNP_biall$SF_tot, SNP_biall$SF_alt/SNP_biall$SF_tot) 
+  
+pooldata_sub@snp.info[,1] <- substring(pooldata_sub@snp.info[,1],1,12)
+SNP <-paste(pooldata_sub@snp.info[,1],pooldata_sub@snp.info[,2] ,sep="_")
+
+mat_biall_poolfstat=matrix(nrow=4,ncol=5722762)
+colnames(mat_biall_poolfstat) <- SNP
+rownames(mat_biall_poolfstat)=c("GL","LF","SF","LL")
+
+mat_biall_poolfstat[1,]=fq_GL
+mat_biall_poolfstat[2,]=fq_LF
+mat_biall_poolfstat[3,]=fq_SF
+mat_biall_poolfstat[4,]=fq_LL
+
+mat_biall_poolfstat[1:4,1:10]
+
+#install.packages("pcadapt")
+library(pcadapt)
+
+mat_biall_pca <- mat_biall_poolfstat[1:4,]
+pca<-read.pcadapt(mat_biall_pca, type = "pool")
+res <- pcadapt(pca)
+summary(res)
+
+# PC scores
+res$scores[,1] # Premier axe
+res$scores[,2] # Second axe
+
+hist(res$pvalues, xlab = "p-values", main = NULL, breaks = 50, col = "orange")
+# Confirms that most of the p-values follow an uniform distribution. The excess of small p-values indicates the presence of outliers.
+
+poplist.names <- c("German Lab", "London Field","Sweden Field","London Lab")
+plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 vs PC2
+plot(res, option = "manhattan")
+```
+![Image 6](ACP_poolfstat.png)
+
 ### Compute FST
 
 ``` 
@@ -510,7 +567,7 @@ boxplot(PairwiseFST_all$PairwiseSnpFST[,1], PairwiseFST_all$PairwiseSnpFST[,2], 
         ylab="FSTs distribution",
         names=c("GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL"))
 ``` 
-![Image 4](boxplot_poolfstat.png) <!-- .element height="50%" width="50%" -->
+![Image 4](boxplot_poolfstat.png)
 
 Identify outliers FST:
 
@@ -575,11 +632,9 @@ plot(x=chr14$position,y=chr14$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20,
 ``` 
 ![Image 5](FST_LF_LL_poolfstat.png)
 
-
 ``` 
 poolfstat_high_FST_LG <- subset(FST_tab_LG, Colour=="red")
-View(poolfstat_high_FST_LG)
-View(chr11)
+write.table(poolfstat_high_FST_LG, file="poolfstat_high_FST_LG.txt", sep=",")
 
 # How many high FST in each chr ?
 
@@ -597,13 +652,11 @@ chr11_high <- subset(FST_tab_LG, LG == 11 & Colour == "red")
 chr12_high <- subset(FST_tab_LG, LG == 12 & Colour == "red")
 chr13_high <- subset(FST_tab_LG, LG == 13 & Colour == "red")
 chr14_high <- subset(FST_tab_LG, LG == 14 & Colour == "red")
-write.table(poolfstat_high_FST_LG, file="poolfstat_high_FST_LG.txt", sep=",")
 
 # Find associate genes
 
 scaff_genes=read.table("scaff_genes.txt") 
 scaff_genes$seqid <- substring(scaff_genes$seqid,1,12)
-View(scaff_genes)
 
 # A faire sur le cluster :
 # scp /Users/chloe/Documents/Cluster/poolfstat_high_FST_LG.txt chaberkorn@pbil-gates.univ-lyon1.fr:/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/
@@ -633,7 +686,6 @@ high_FST=read.table("poolfstat_high_FST_LG.txt", header=T, sep=",")
 poolfstat_genes_high_FST_LG <- right_join(newtest_genes, high_FST) # Joining, by = c("scaffold", "position")
 
 write.table(newtest_genes, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/newtest_genes.txt", sep=",")
-
 write.table(poolfstat_genes_high_FST_LG, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/poolfstat_genes_high_FST_LG.txt", sep=",")
 
 # Back to R computer session
@@ -658,63 +710,6 @@ uniq_poolfstat_cds_high_FST_LG <- poolfstat_cds_high_FST_LG[!duplicated(poolfsta
 uniq_poolfstat_cds_high_FST_LG$X <- 1:length(uniq_poolfstat_cds_high_FST_LG$X)
 View(uniq_poolfstat_cds_high_FST_LG)
 ```
-
-Run PCA
-
-```
-# Build pcadapt matrix
-
-ref_GL <- pooldata_sub@refallele.readcount[,1]
-ref_LF <- pooldata_sub@refallele.readcount[,2]
-ref_SF <- pooldata_sub@refallele.readcount[,3]
-ref_LL <- pooldata_sub@refallele.readcount[,4]
-
-alt_GL <- pooldata_sub@readcoverage[,1] - pooldata_sub@refallele.readcount[,1]
-alt_LF <- pooldata_sub@readcoverage[,2] - pooldata_sub@refallele.readcount[,2]
-alt_SF <- pooldata_sub@readcoverage[,3] - pooldata_sub@refallele.readcount[,3]
-alt_LL <- pooldata_sub@readcoverage[,4] - pooldata_sub@refallele.readcount[,4]
-
-fq_GL <- ref_GL/pooldata_sub@readcoverage[,1]
-fq_LF <- ref_LF/pooldata_sub@readcoverage[,2]
-fq_SF <- ref_SF/pooldata_sub@readcoverage[,3]
-fq_LL <- ref_LL/pooldata_sub@readcoverage[,4]
-
-# Different (?) from : SNP_biall$fq_SF <- ifelse(SNP_biall$ref==SNP_biall$SF1, SNP_biall$SF_ref/SNP_biall$SF_tot, SNP_biall$SF_alt/SNP_biall$SF_tot) 
-  
-pooldata_sub@snp.info[,1] <- substring(pooldata_sub@snp.info[,1],1,12)
-SNP <-paste(pooldata_sub@snp.info[,1],pooldata_sub@snp.info[,2] ,sep="_")
-
-mat_biall_poolfstat=matrix(nrow=4,ncol=5722762)
-colnames(mat_biall_poolfstat) <- SNP
-rownames(mat_biall_poolfstat)=c("GL","LF","SF","LL")
-
-mat_biall_poolfstat[1,]=fq_GL
-mat_biall_poolfstat[2,]=fq_LF
-mat_biall_poolfstat[3,]=fq_SF
-mat_biall_poolfstat[4,]=fq_LL
-
-mat_biall_poolfstat[1:4,1:10]
-
-#install.packages("pcadapt")
-library(pcadapt)
-
-mat_biall_pca <- mat_biall_poolfstat[1:4,]
-pca<-read.pcadapt(mat_biall_pca, type = "pool")
-res <- pcadapt(pca)
-summary(res)
-
-# PC scores
-res$scores[,1] # Premier axe
-res$scores[,2] # Second axe
-
-hist(res$pvalues, xlab = "p-values", main = NULL, breaks = 50, col = "orange")
-# Confirms that most of the p-values follow an uniform distribution. The excess of small p-values indicates the presence of outliers.
-
-poplist.names <- c("German Lab", "London Field","Sweden Field","London Lab")
-plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 vs PC2
-plot(res, option = "manhattan")
-```
-![Image 6](ACP_poolfstat.png)
 
 UGPMA can be compute on FST data :
 
