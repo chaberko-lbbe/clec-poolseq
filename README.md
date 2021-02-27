@@ -310,7 +310,7 @@ GL
 Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 0.00   15.04   25.21   37.73   28.02 8126.32 
 
-<img src="order_length.png" width="500" height="500">
+<img src="order_length.png" width="600" height="500" style="background:none; border:none; box-shadow:none;">
 
 As we can see, scaffold with extremely high mean coverage aren't the longer ones. Let's analyse it deeper:
 
@@ -540,7 +540,9 @@ poplist.names <- c("German Lab", "London Field","Sweden Field","London Lab")
 plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 vs PC2
 plot(res, option = "manhattan")
 ```
-![Image 6](ACP_poolfstat.png)
+
+<img src="ACP_poolfstat.png" width="600" height="500" style="background:none; border:none; box-shadow:none;">
+
 PCA allows us to detect the SNPs distinguishing the 4 strains: London Field and London Lab seems poorly genetically differenciated. The genetic differenciation appears to be related to the geographical repartition. 
 
 
