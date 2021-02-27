@@ -637,7 +637,7 @@ plot(x=chr12$position,y=chr12$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20,
 plot(x=chr13$position,y=chr13$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 13", col=chr13$Colour)
 plot(x=chr14$position,y=chr14$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 14", col=chr14$Colour)
 ``` 
-<img src="FST_LF_LL_poolfstat.png" width="800" height="600" style="background:none; border:none; box-shadow:none;">
+<img src="FST_LF_LL_poolfstat.png" width="850" height="600" style="background:none; border:none; box-shadow:none;">
 
 ``` 
 poolfstat_high_FST_LG <- subset(FST_tab_LG, Colour=="red")
@@ -778,6 +778,198 @@ pooldata2genobaypass(pooldata_sub,
                      prefix = "poolfstatdata_sub_110221", # prefix used for output file names
                      subsamplesize = -1) # all SNPs are considered in the output
                      # subsamplingmethod = "thinning")
+```
+
+
+
+
+
+
+
+
+
+
+Tableau trop lourd : on commence par compter combien il y a de lignes
+
+wc -l data_cimex_2.1_vs_data_cimex_1.1.blastn
+654686868
+
+On ouvre donc déjà la première moitié du tableau : nrow=327343434 ; puis on l'ignore : skip=327343434
+
+```{r}
+# /beegfs/data/soft/R-3.5.2/bin/R
+
+data <- read.table("data_cimex_2.1_vs_data_cimex_1.1.blastn", nrows= 327343434) 
+colnames(data) <- c("query_id","subject_id","identity","alignement_length","mismatches","gap_opens","qstart","qend","sstart","send","evalue","bitscore")
+data <- data[,c(1:2,7:11)]
+
+test <- data[grep("^lg.*", data$subject_id), ]
+
+# decouper la colonne subject_id en 2 : enleve partie "lg"
+data$subject_id <- substr(data$subject_id,3,4) 
+
+library(dplyr)
+
+#TESTS :
+toto <- unique(data[c("query_id","subject_id")])
+test2 <- data %>% group_by(query_id) %>% summarise(subject_id = max(subject_id, na.rm=TRUE))
+test3 <- data %>% group_by(query_id) %>% summarise()
+test4 <- aggregate(data, by=c('query_id', 'subject_id' ), FUN=function(x) {x})
+
+#write.table(test2, file = "data_cimex_2.1_vs_data_cimex_1.1.blastn-part1.bed", row.names = F, quote=F)
+#write.table(test2, file = "data_cimex_2.1_vs_data_cimex_1.1.blastn-part2.bed", row.names = F, quote=F)
+
+data2 <- read.table("data_cimex_2.1_vs_data_cimex_1.1.blastn", skip= 327343434) # ncol=c(1:2;7:11)
+
+colnames(data2) <- c("query_id","subject_id","identity","alignement_length","mismatches","gap_opens","qstart","qend","sstart","send","evalue","bitscore")
+
+test <- data2[grep("^lg.*", data2$subject_id), ]
+
+# decouper la colonne subject_id en 2 : enleve partie "lg"
+test$subject_id <- substr(test$subject_id,3,4) 
+head(test)
+
+write.table(test, file = "test_data_cimex_2.1_vs_data_cimex_1.1.blastn-part2", row.names = F, quote=F)
+
+library(dplyr)
+test2 <- test %>% group_by(query_id) %>% 
+  summarise(subject_id = max(subject_id, na.rm=TRUE))
+
+#write.table(test2, file = "data_cimex_2.1_vs_data_cimex_1.1.blastn-part1.bed", row.names = F, quote=F)
+write.table(test2, file = "data_cimex_2.1_vs_data_cimex_1.1.blastn-part2.bed", row.names = F, quote=F)
+```
+
+PoPoolation 1
+
+1st step // Indexing & Pileuping
+
+```
+#!/bin/bash
+#SBATCH --cpus-per-task=8
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/pileuping_GL.error
+#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/pileuping_GL.out
+#SBATCH -J Genome_pileuping_Cimex_lectularius
+
+/beegfs/data/soft/samtools-1.9/bin/samtools index GL_mapped_sorted.bam -@ 22
+/beegfs/data/soft/samtools-1.9/bin/samtools mpileup -B -Q 0 -f /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/ncbi-genomes-2020-12-15/GCF_000648675.2_Clec_2.1_genomic.fna /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/GL_mapped_sorted.bam > /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/GL.mpileup
+```
+
+2st step // Detect, remove indels and subsample to uniform coverage
+
+```
+nano indels_GL.sh 
+
+#!/bin/bash
+#SBATCH --cpus-per-task=8
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/indels_GL.error
+#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/indels_GL.out
+#SBATCH -J Genome_indels_Cimex_lectularius
+
+perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/basic-pipeline/identify-genomic-indel-regions.pl --indel-window 5 --min-count 2 --input GL.mpileup --output indels_GL.gtf
+
+nano filter_indels_GL.sh
+
+#!/bin/bash
+#SBATCH --cpus-per-task=8
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/filter_indels_SF.error
+#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/filter_indels_SF.out
+#SBATCH -J Genome_indels_Cimex_lectularius
+
+perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/basic-pipeline/filter-pileup-by-gtf.pl --input /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SF.mpileup --gtf indels_SF.gtf --output SF.idf.mpileup
+
+nano unicov_GL.sh 
+
+#!/bin/bash
+#SBATCH --cpus-per-task=8
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/unicov_GL.error
+#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/unicov_GL.out
+#SBATCH -J Genome_indels_Cimex_lectularius
+
+perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/basic-pipeline/subsample-pileup.pl --min-qual 20 --method withoutreplace --fastq-type sanger --max-coverage 39 --target-coverage 26 --input GL.idf.mpileup --output GL.cov.idf.mpileup
+```
+
+3rd step // Compute Tajima's Pi using a slinding window:
+
+```
+nano variance-sliding_LF.sh
+
+#!/bin/bash
+#SBATCH --cpus-per-task=1
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/variance_LL.error
+#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/variance_LL.out
+#SBATCH -J Genome_variance_Cimex_lectularius
+
+# For Dtaij
+perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/Variance-sliding.pl --fastq-type sanger \
+--input /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/LL.cov.idf.mpileup --output /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/window_500/LL.TajD.txt --measure D --min-qual 20 --min-covered-fraction 0.0 --min-count 2 --window-size 500 --step-size 500 --min-coverage 4 --max-coverage 25 --pool-size 30
+
+# For Pi
+perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/Variance-sliding.pl --fastq-type sanger \
+--input /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/LL.cov.idf.mpileup --output /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/window_1000/LL.pi.txt --measure pi --min-qual 20 --min-covered-fraction 0.0 --min-count 2 --window-size 1000 --step-size 1000 --min-coverage 4 --max-coverage 25 --pool-size 30
+
+# Default value for --min-covered-fraction: 0.5 
+```
+
+We can also use PoPoolation 2 to compare the populations between each other:
+
+1st step // Indexing & Pileuping
+
+```
+#!/bin/bash
+#SBATCH --cpus-per-task=8
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/pileuping_GL_LF.error
+#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/pileuping_GL_LF.out
+#SBATCH -J Genome_pileuping_Cimex_lectularius
+
+/beegfs/data/soft/samtools-1.9/bin/samtools index /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/GL_mapped_sorted.bam -@ 22
+/beegfs/data/soft/samtools-1.9/bin/samtools index /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/LF.mapped_sorted.bam -@ 22
+/beegfs/data/soft/samtools-1.9/bin/samtools index /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/LL_mapped_sorted.bam -@ 22
+/beegfs/data/soft/samtools-1.9/bin/samtools index /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SF_mapped_sorted.bam -@ 22
+
+/beegfs/data/soft/samtools-1.9/bin/samtools mpileup -B /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/GL_mapped_sorted.bam /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/LF_mapped_sorted.bam /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/LL_mapped_sorted.bam /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SF_mapped_sorted.bam > all.mpileup
+perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/mpileup2sync.pl --fastq-type sanger --min-qual 20 --input all.mpileup --output all.sync
+```
+
+2nd step // Compute allelic frequency differences
+
+```
+#!/bin/bash
+#SBATCH --cpus-per-task=8
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/fq_all.error
+#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/fq_all.out
+#SBATCH -J Genome_pileuping_Cimex_lectularius
+
+perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/snp-frequency-diff.pl --input all.sync --output-prefix all --min-count 5 --min-coverage 10 --max-coverage 200
+```
+
+3nd step // Compute FST for each SNP or by using a sliding window
+
+```
+#!/bin/bash
+#SBATCH --cpus-per-task=8
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/fst_SF_LF.error
+#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/fst_SF_LF.out
+#SBATCH -J Genome_pileuping_Cimex_lectularius
+
+perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/fst-sliding.pl --input all.sync --output all.fst --suppress-noninformative --min-count 5 --min-coverage 10 --max-coverage 200 --min-covered-fraction 0.0 --window-size 1 --step-size 1 --pool-size 30
+
+perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/fst-sliding.pl --input all.sync --output all_w500.fst --min-count 5 --min-coverage 10 --max-coverage 200 --min-covered-fraction 0.0 --window-size 500 --step-size 500 --pool-size 30
 ```
 
 
