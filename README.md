@@ -310,7 +310,7 @@ GL
 Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 0.00   15.04   25.21   37.73   28.02 8126.32 
 
-<img src="order_length.png" width="600" height="400" style="background:none; border:none; box-shadow:none;">
+<img src="order_length.png" width="600" height="500" style="background:none; border:none; box-shadow:none;">
 
 As we can see, scaffold with extremely high mean coverage aren't the longer ones. Let's analyse it deeper:
 
@@ -541,7 +541,7 @@ plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 
 plot(res, option = "manhattan")
 ```
 
-<img src="ACP_poolfstat.png" width="600" height="300" style="background:none; border:none; box-shadow:none;">
+<img src="ACP_poolfstat.png" width="600" height="500" style="background:none; border:none; box-shadow:none;">
 
 PCA allows us to detect the SNPs distinguishing the 4 strains: London Field and London Lab seems poorly genetically differenciated. The genetic differenciation appears to be related to the geographical repartition. 
 
@@ -574,7 +574,7 @@ boxplot(PairwiseFST_all$PairwiseSnpFST[,1], PairwiseFST_all$PairwiseSnpFST[,2], 
         names=c("GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL"))
 ``` 
 
-<img src="boxplot_poolfstat.png" width="600" height="200" style="background:none; border:none; box-shadow:none;">
+<img src="boxplot_poolfstat.png" width="600" height="400" style="background:none; border:none; box-shadow:none;">
 
 Identify outliers FST:
 
