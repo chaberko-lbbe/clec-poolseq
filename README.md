@@ -310,7 +310,7 @@ GL
 Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 0.00   15.04   25.21   37.73   28.02 8126.32 
 
-<img src="order_length.png" width="600" height="500" style="background:none; border:none; box-shadow:none;">
+<img src="order_length.png" width="600" height="450" style="background:none; border:none; box-shadow:none;">
 
 As we can see, scaffold with extremely high mean coverage aren't the longer ones. Let's analyse it deeper:
 
@@ -541,7 +541,7 @@ plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 
 plot(res, option = "manhattan")
 ```
 
-<img src="ACP_poolfstat.png" width="600" height="500" style="background:none; border:none; box-shadow:none;">
+<img src="ACP_poolfstat.png" width="600" height="450" style="background:none; border:none; box-shadow:none;">
 
 PCA allows us to detect the SNPs distinguishing the 4 strains: London Field and London Lab seems poorly genetically differenciated. The genetic differenciation appears to be related to the geographical repartition. 
 
@@ -637,7 +637,7 @@ plot(x=chr12$position,y=chr12$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20,
 plot(x=chr13$position,y=chr13$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 13", col=chr13$Colour)
 plot(x=chr14$position,y=chr14$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 14", col=chr14$Colour)
 ``` 
-![Image 5](FST_LF_LL_poolfstat.png)
+<img src="FST_LF_LL_poolfstat.png" width="600" height="600" style="background:none; border:none; box-shadow:none;">
 
 ``` 
 poolfstat_high_FST_LG <- subset(FST_tab_LG, Colour=="red")
@@ -754,7 +754,8 @@ data_upgma <- upgma(matrix_upgma, method = "average")
 plot(data_upgma)
 plot(data_upgma_auto)
 ``` 
-![Image 7](.png)
+<img src="plot-pairwiseFST.png" width="400" height="400" style="background:none; border:none; box-shadow:none;">
+
 
 
 ### Estimate genetic polymorphism
