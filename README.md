@@ -637,7 +637,7 @@ plot(x=chr12$position,y=chr12$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20,
 plot(x=chr13$position,y=chr13$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 13", col=chr13$Colour)
 plot(x=chr14$position,y=chr14$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 14", col=chr14$Colour)
 ``` 
-<img src="FST_LF_LL_poolfstat.png" width="600" height="600" style="background:none; border:none; box-shadow:none;">
+<img src="FST_LF_LL_poolfstat.png" width="800" height="600" style="background:none; border:none; box-shadow:none;">
 
 ``` 
 poolfstat_high_FST_LG <- subset(FST_tab_LG, Colour=="red")
