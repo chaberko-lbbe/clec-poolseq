@@ -310,7 +310,7 @@ GL
 Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 0.00   15.04   25.21   37.73   28.02 8126.32 
 
-![Image 2](order_length.png)
+<img src="order_length.png" width="500" height="500">
 
 As we can see, scaffold with extremely high mean coverage aren't the longer ones. Let's analyse it deeper:
 
@@ -349,7 +349,6 @@ cat wolbachia_cimex_genome.fna g-proteobacteria_genome.fna clostridium_genome.fn
 /beegfs/data/chaberkorn/Tools/myconda/bin/makeblastdb -in data_bacteria.fasta -dbtype nucl -out data_bacteria 
 /beegfs/data/chaberkorn/Tools/myconda/bin/blastn -query /beegfs/data/chaberkorn/PoolSeq_Clec/Genomes/ref_NC_030043.fa -db data_cimex -out scaff_030043_vs_data_cimex.blastn -outfmt 6 -max_target_seqs 5 -evalue 10e-1
 ```
-
 Open "cimex_vs_data_TE.blastn" on Excel, convert in CSV:
 
 ```
@@ -439,15 +438,17 @@ View(data_TE)
 
 ## Genetic differenciation of populations
 
-The goal is to understand what differenciates the four strains of *Cimex lectularius* PoolSeq samples: London Lab, London Field, German Lab, Sweden Field.
+The goal is to understand what differenciates the four strains of *Cimex lectularius* PoolSeq samples: London Lab, London Field, German Lab, Sweden Field. 
+Which are the most similar? What seems to differentiate them?
 
 hypopthèse : certaines R/ d'autres S (donner infos site cimesxtore)
 
-We will have to download a few softs.
+
+We will have to download a few soft.
 
 ### Install tools
 
-Poolation & PoPoolation2 :
+PoPoolation & PoPoolation2 :
 ``` 
 chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation_1.2.2
 chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation2_1201
@@ -461,7 +462,7 @@ install.packages("poolfstat")
 
 ### Detecting SNPs
 
-
+A SNP (Single Nucleotide Polymorphism) is a ponctual mutation that may be associated with candidate regions for resistance.
 The output file 'all.sync' from PoPoolation can be used with Poolfstat to compute the SNPs:  
 
 ``` 
@@ -540,6 +541,9 @@ plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 
 plot(res, option = "manhattan")
 ```
 ![Image 6](ACP_poolfstat.png)
+PCA allows us to detect the SNPs distinguishing the 4 strains: London Field and London Lab seems poorly genetically differenciated. The genetic differenciation appears to be related to the geographical repartition. 
+
+
 
 ### Compute FST
 
