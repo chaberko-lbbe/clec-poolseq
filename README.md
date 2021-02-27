@@ -28,7 +28,6 @@ We will have to download a few softs.
 ### Install tools
 
 BWA :
-
 ``` 
 git clone https://github.com/lh3/bwa.git
 cd bwa
@@ -38,20 +37,17 @@ make
 
 Trimmomatic :
 We will have to download the associated adapters. To do so : in fastq file, look at overrepresented sequences -> "TruSeq Adapter". These primers come from the TruSeq-3 library.
-
 ``` 
 chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/trimmomatic-0.39
 chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/TruSeq3-PE.fa
 ``` 
 
 Bedtools :
-
 ``` 
 chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/bedtools2
 ``` 
 
 FastUniq :
-
 ``` 
 chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/FastUniq
 ``` 
@@ -459,7 +455,41 @@ We will have to download a few softs.
 
 ### Install tools
 
+Poolation & PoPoolation2 :
+``` 
+chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation_1.2.2
+chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation2_1201
+```
+
+Poolfstat :
+``` 
+install.packages("poolfstat")
+```
+
+
 ### Detecting SNPs
+
+
+The output file 'all.sync' from PoPoolation can be used with Poolfstat to compute the SNPs:  
+
+``` 
+library(poolfstat)
+
+# wc -l all.sync = 509,820,671
+# Estimate time - 0.36s/Mi lines processed -> 510*0.36 ~ 184 min soit 3h
+# Default parameters - start at 13h45, end at ~17h (189.86 min)
+
+pooldata = popsync2pooldata(sync.file = "all.sync", poolsizes = rep(30,4), 
+                            poolnames = c("GL","LF","SF","LL"), min.rc = 1, min.cov.per.pool = -1,
+                            max.cov.per.pool = 1e+06, min.maf = 0.01, noindel = TRUE,
+                            nlines.per.readblock = 1e+06, nthreads = 1)
+
+# 509.8207 millions lines processed in 189.86  min.;  10,139,943 SNPs found
+# Data consists of 10,139,943 SNPs for 4 Pools
+
+summary(pooldata)
+head(pooldata@snp.info)
+``` 
 
 ### Compute FST
 
@@ -473,9 +503,4 @@ We will have to download a few softs.
 
 
 
-Poolation & PoPoolation2 :
 
-``` 
-chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation_1.2.2
-chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation2_1201
-```
