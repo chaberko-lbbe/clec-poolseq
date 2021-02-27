@@ -437,14 +437,6 @@ View(data_TE)
 # NW_019392631.1	10269	11010	rnd-1_family-58#LINE/LOA
 ```
 
-
-
-](#Genetic-differenciation-of-populations)**
-	- [Install tools](#Install-tools)
-	- [Detecting SNPs](#Detecting-SNPs)
-	- [Compute FST](#Compute-FST)
-	- [Estimate genetic polymorphism](#Estimate-genetic-polymorphism
-
 ## Genetic differenciation of populations
 
 The goal is to understand what differenciates the four strains of *Cimex lectularius* PoolSeq samples: London Lab, London Field, German Lab, Sweden Field.
@@ -494,8 +486,6 @@ pooldata_sub <- pooldata.subset(pooldata, pool.index = c(1,2,3,4), min.cov.per.p
 
 ### Compute FST
 
-![Image 3](order_length.png)
-
 ``` 
 PairwiseFST = computePairwiseFSTmatrix(pooldata_sub, method = "Anova", min.cov.per.pool = -1, 
                                      max.cov.per.pool = 1e+06, min.maf = -1, output.snp.values = FALSE)
@@ -520,6 +510,7 @@ boxplot(PairwiseFST_all$PairwiseSnpFST[,1], PairwiseFST_all$PairwiseSnpFST[,2], 
         ylab="FSTs distribution",
         names=c("GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL"))
 ``` 
+![Image 4](boxplot_poolfstat.png)
 
 Identify outliers FST:
 
@@ -582,7 +573,7 @@ plot(x=chr12$position,y=chr12$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20,
 plot(x=chr13$position,y=chr13$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 13", col=chr13$Colour)
 plot(x=chr14$position,y=chr14$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 14", col=chr14$Colour)
 ``` 
-
+![Image 5](FST_LF_LL_poolfstat.png)
 
 
 ``` 
@@ -606,10 +597,8 @@ chr11_high <- subset(FST_tab_LG, LG == 11 & Colour == "red")
 chr12_high <- subset(FST_tab_LG, LG == 12 & Colour == "red")
 chr13_high <- subset(FST_tab_LG, LG == 13 & Colour == "red")
 chr14_high <- subset(FST_tab_LG, LG == 14 & Colour == "red")
-
 write.table(poolfstat_high_FST_LG, file="poolfstat_high_FST_LG.txt", sep=",")
 
-View(chr11_high)
 # Find associate genes
 
 scaff_genes=read.table("scaff_genes.txt") 
@@ -641,8 +630,7 @@ colnames(newtest_genes) <- c("scaffold", "start","end","gene","length","position
 newtest_genes$scaffold <- substring(newtest_genes$scaffold,1,12)
 
 high_FST=read.table("poolfstat_high_FST_LG.txt", header=T, sep=",") 
-poolfstat_genes_high_FST_LG <- right_join(newtest_genes, high_FST)
-#> Joining, by = c("scaffold", "position")
+poolfstat_genes_high_FST_LG <- right_join(newtest_genes, high_FST) # Joining, by = c("scaffold", "position")
 
 write.table(newtest_genes, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/newtest_genes.txt", sep=",")
 
@@ -719,17 +707,14 @@ summary(res)
 res$scores[,1] # Premier axe
 res$scores[,2] # Second axe
 
-
 hist(res$pvalues, xlab = "p-values", main = NULL, breaks = 50, col = "orange")
 # Confirms that most of the p-values follow an uniform distribution. The excess of small p-values indicates the presence of outliers.
 
-
 poplist.names <- c("German Lab", "London Field","Sweden Field","London Lab")
 plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 vs PC2
-
 plot(res, option = "manhattan")
-
 ```
+![Image 6](ACP_poolfstat.png)
 
 UGPMA can be compute on FST data :
 
@@ -767,7 +752,7 @@ data_upgma <- upgma(matrix_upgma, method = "average")
 plot(data_upgma)
 plot(data_upgma_auto)
 ``` 
-![Image 4](order_length.png)
+![Image 7](plot-pairwiseFST.png)
 
 
 ### Estimate genetic polymorphism
