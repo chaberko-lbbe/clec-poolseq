@@ -510,7 +510,7 @@ boxplot(PairwiseFST_all$PairwiseSnpFST[,1], PairwiseFST_all$PairwiseSnpFST[,2], 
         ylab="FSTs distribution",
         names=c("GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL"))
 ``` 
-![Image 4](boxplot_poolfstat.png)
+![Image 4](boxplot_poolfstat.png) <!-- .element height="50%" width="50%" -->
 
 Identify outliers FST:
 
@@ -752,7 +752,7 @@ data_upgma <- upgma(matrix_upgma, method = "average")
 plot(data_upgma)
 plot(data_upgma_auto)
 ``` 
-![Image 7](plot-pairwiseFST.png)
+![Image 7](.png)
 
 
 ### Estimate genetic polymorphism
