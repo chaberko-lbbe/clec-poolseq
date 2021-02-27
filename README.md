@@ -483,18 +483,314 @@ pooldata = popsync2pooldata(sync.file = "all.sync", poolsizes = rep(30,4),
                             poolnames = c("GL","LF","SF","LL"), min.rc = 1, min.cov.per.pool = -1,
                             max.cov.per.pool = 1e+06, min.maf = 0.01, noindel = TRUE,
                             nlines.per.readblock = 1e+06, nthreads = 1)
+# 509.8207 millions lines processed in 189.86  min.;  10 139 943 SNPs found for 4 Pools
 
-# 509.8207 millions lines processed in 189.86  min.;  10,139,943 SNPs found
-# Data consists of 10,139,943 SNPs for 4 Pools
-
-summary(pooldata)
-head(pooldata@snp.info)
+# Do subset of pooldata :
+pooldata_sub <- pooldata.subset(pooldata, pool.index = c(1,2,3,4), min.cov.per.pool = 10, max.cov.per.pool = 200, min.maf = 0.05)
+# pool.index = indexes of the pools (at least two), that should be selected to create the new pooldata objec
+# min.maf correspond to Minimal allowed Minor Allele Frequency -> min-count of 5 w/ PoPoolation2
+# With same parameters, 5 722 762 SNPs for 4 Pools, compared to 5 837 216 w/ PoPoolation2)
 ``` 
 
 ### Compute FST
 
+![Image 3](order_length.png)
+
+``` 
+PairwiseFST = computePairwiseFSTmatrix(pooldata_sub, method = "Anova", min.cov.per.pool = -1, 
+                                     max.cov.per.pool = 1e+06, min.maf = -1, output.snp.values = FALSE)
+# output.snp.values : If TRUE, provide SNP-specific pairwise FST for each comparisons (may lead to a huge result object if the number of pools and/or SNPs is large)
+
+PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova", min.cov.per.pool = -1, 
+                                     max.cov.per.pool = 1e+06, min.maf = -1, output.snp.values = TRUE))
+``` 
+
+Visualize FST:
+
+``` 
+PairwiseFST_all$PairwiseSnpFST
+# Ordre : GL_vs_LF, GL_vs_SF, GL_vs_LL, LF_vs_SF, LF_vs_LL, SF_vs_LL
+
+mean(PairwiseFST_all$PairwiseSnpFST[,5], na.rm=T)
+summary(PairwiseFST_all$PairwiseSnpFST)
+
+boxplot(PairwiseFST_all$PairwiseSnpFST[,1], PairwiseFST_all$PairwiseSnpFST[,2], PairwiseFST_all$PairwiseSnpFST[,3], PairwiseFST_all$PairwiseSnpFST[,4], PairwiseFST_all$PairwiseSnpFST[,5], PairwiseFST_all$PairwiseSnpFST[,6], 
+        border=c("#F8766D","#D89000","#72B000","#00C19C","#00B0F6","#CF78FF"), 
+        xlab="Strains comparisons", 
+        ylab="FSTs distribution",
+        names=c("GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL"))
+``` 
+
+Identify outliers FST:
+
+``` 
+FST_tab_LG$GL_vs_LF <- as.numeric(FST_tab_LG$GL_vs_LF)
+FST_tab_LG$GL_vs_SF <- as.numeric(FST_tab_LG$GL_vs_SF)
+FST_tab_LG$LF_vs_LL <- as.numeric(FST_tab_LG$LF_vs_LL)
+FST_tab_LG$SF_vs_LL <- as.numeric(FST_tab_LG$SF_vs_LL)
+        
+FST_tab_LG$Colour="black"
+FST_tab_LG$Colour[(FST_tab_LG$GL_vs_LF > quantile(FST_tab_LG$GL_vs_LF, 0.99, na.rm=T) 
+                   & FST_tab_LG$GL_vs_SF > quantile(FST_tab_LG$GL_vs_SF, 0.99, na.rm=T)
+                   & FST_tab_LG$LF_vs_LL > quantile(FST_tab_LG$LF_vs_LL, 0.99, na.rm=T)
+                   & FST_tab_LG$SF_vs_LL > quantile(FST_tab_LG$SF_vs_LL, 0.99, na.rm=T))]="red"
+
+FST_tab_LG$Colour[(FST_tab_LG$GL_vs_LF > quantile(FST_tab_LG$GL_vs_LF, 0.99, na.rm=T) 
+                   & FST_tab_LG$GL_vs_SF > quantile(FST_tab_LG$GL_vs_SF, 0.99, na.rm=T)
+                   & FST_tab_LG$LF_vs_LL > quantile(FST_tab_LG$LF_vs_LL, 0.99, na.rm=T)
+                   & FST_tab_LG$SF_vs_LL > quantile(FST_tab_LG$SF_vs_LL, 0.99, na.rm=T))]="red"
+
+length((FST_tab_LG$GL_vs_LF > quantile(FST_tab_LG$GL_vs_LF, 0.99, na.rm=T) & FST_tab_LG$GL_vs_SF > quantile(FST_tab_LG$GL_vs_SF, 0.99, na.rm=T))[(FST_tab_LG$GL_vs_LF > quantile(FST_tab_LG$GL_vs_LF, 0.99, na.rm=T) & FST_tab_LG$GL_vs_SF > quantile(FST_tab_LG$GL_vs_SF, 0.99, na.rm=T))==TRUE])
+
+#  Missing values and NaN are not allowed if 'na.rm' is FALSE (default value)
+
+library(dplyr)
+FST_tab_LG <- FST_tab_LG %>% arrange(Colour)
+
+# Define subset for each chromosome :
+
+chr1 <- subset(FST_tab_LG, LG == 1)
+chr2 <- subset(FST_tab_LG, LG == 2)
+chr3 <- subset(FST_tab_LG, LG == 3)
+chr4 <- subset(FST_tab_LG, LG == 4)
+chr5 <- subset(FST_tab_LG, LG == 5)
+chr6 <- subset(FST_tab_LG, LG == 6)
+chr7 <- subset(FST_tab_LG, LG == 7)
+chr8 <- subset(FST_tab_LG, LG == 8)
+chr9 <- subset(FST_tab_LG, LG == 9)
+chr10 <- subset(FST_tab_LG, LG == 10)
+chr11 <- subset(FST_tab_LG, LG == 11)
+chr12 <- subset(FST_tab_LG, LG == 12)
+chr13 <- subset(FST_tab_LG, LG == 13)
+chr14 <- subset(FST_tab_LG, LG == 14)
+
+# Open a script and copy paste for each combination :
+
+par(mfrow=c(3,5))
+plot(x=chr1$position,y=chr1$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 1", col=chr1$Colour)
+plot(x=chr2$position,y=chr2$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 2", col=chr2$Colour)
+plot(x=chr3$position,y=chr3$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 3", col=chr3$Colour)
+plot(x=chr4$position,y=chr4$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 4", col=chr4$Colour)
+plot(x=chr5$position,y=chr5$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 5", col=chr5$Colour)
+plot(x=chr6$position,y=chr6$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 6", col=chr6$Colour)
+plot(x=chr7$position,y=chr7$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 7", col=chr7$Colour)
+plot(x=chr8$position,y=chr8$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 8", col=chr8$Colour)
+plot(x=chr9$position,y=chr9$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 9", col=chr9$Colour)
+plot(x=chr10$position,y=chr10$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 10", col=chr10$Colour)
+plot(x=chr11$position,y=chr11$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 11", col=chr11$Colour)
+plot(x=chr12$position,y=chr12$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 12", col=chr12$Colour)
+plot(x=chr13$position,y=chr13$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 13", col=chr13$Colour)
+plot(x=chr14$position,y=chr14$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 14", col=chr14$Colour)
+``` 
+
+
+
+``` 
+poolfstat_high_FST_LG <- subset(FST_tab_LG, Colour=="red")
+View(poolfstat_high_FST_LG)
+View(chr11)
+
+# How many high FST in each chr ?
+
+chr1_high <- subset(FST_tab_LG, LG == 1 & Colour == "red")
+chr2_high <- subset(FST_tab_LG, LG == 2 & Colour == "red")
+chr3_high <- subset(FST_tab_LG, LG == 3 & Colour == "red")
+chr4_high <- subset(FST_tab_LG, LG == 4 & Colour == "red")
+chr5_high <- subset(FST_tab_LG, LG == 5 & Colour == "red")
+chr6_high <- subset(FST_tab_LG, LG == 6 & Colour == "red")
+chr7_high <- subset(FST_tab_LG, LG == 7 & Colour == "red")
+chr8_high <- subset(FST_tab_LG, LG == 8 & Colour == "red")
+chr9_high <- subset(FST_tab_LG, LG == 9 & Colour == "red")
+chr10_high <- subset(FST_tab_LG, LG == 10 & Colour == "red")
+chr11_high <- subset(FST_tab_LG, LG == 11 & Colour == "red")
+chr12_high <- subset(FST_tab_LG, LG == 12 & Colour == "red")
+chr13_high <- subset(FST_tab_LG, LG == 13 & Colour == "red")
+chr14_high <- subset(FST_tab_LG, LG == 14 & Colour == "red")
+
+write.table(poolfstat_high_FST_LG, file="poolfstat_high_FST_LG.txt", sep=",")
+
+View(chr11_high)
+# Find associate genes
+
+scaff_genes=read.table("scaff_genes.txt") 
+scaff_genes$seqid <- substring(scaff_genes$seqid,1,12)
+View(scaff_genes)
+
+# A faire sur le cluster :
+# scp /Users/chloe/Documents/Cluster/poolfstat_high_FST_LG.txt chaberkorn@pbil-gates.univ-lyon1.fr:/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/
+# cd /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/
+# /beegfs/data/soft/R-3.5.2/bin/R
+
+scaff_genes=read.table("scaff_genes.txt") 
+
+library(dplyr)
+library(tidyr)
+
+newtest_genes <- 
+  scaff_genes %>% 
+  rowwise %>% 
+  mutate(pos = paste(seq(start, 
+                         end), 
+                     collapse = ",")) %>%
+  tidyr::separate_rows(pos) %>%
+  mutate(pos = as.integer(pos))
+
+newtest_genes<-subset(newtest_genes, select=-c(source,type,score,strand,phase,ID,
+                                               Dbxref,Name,gbkey,gene_biotype))
+colnames(newtest_genes) <- c("scaffold", "start","end","gene","length","position")
+newtest_genes$scaffold <- substring(newtest_genes$scaffold,1,12)
+
+high_FST=read.table("poolfstat_high_FST_LG.txt", header=T, sep=",") 
+poolfstat_genes_high_FST_LG <- right_join(newtest_genes, high_FST)
+#> Joining, by = c("scaffold", "position")
+
+write.table(newtest_genes, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/newtest_genes.txt", sep=",")
+
+write.table(poolfstat_genes_high_FST_LG, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/poolfstat_genes_high_FST_LG.txt", sep=",")
+
+# Back to R computer session
+
+poolfstat_genes_high_FST_LG <- read.table(file="~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/SNPs/poolfstat_genes_high_FST_LG.txt", sep=",", header=T)
+View(poolfstat_genes_high_FST_LG)
+
+# IF we have gene ID, merge with scaff_cds table to have product column
+
+scaff_cds=read.table("~/Desktop/CloudStation/THESE/CNV/scaff_cds.txt") 
+head(scaff_cds)
+
+library(tidyverse)
+scaff_cds <- scaff_cds %>%
+  select(gene, product)
+View(scaff_cds)
+
+poolfstat_cds_high_FST_LG <- left_join(poolfstat_genes_high_FST_LG,scaff_cds, by=c("gene"))
+View(high_FST_cds)
+
+uniq_poolfstat_cds_high_FST_LG <- poolfstat_cds_high_FST_LG[!duplicated(poolfstat_cds_high_FST_LG[,c('start','position')]),]
+uniq_poolfstat_cds_high_FST_LG$X <- 1:length(uniq_poolfstat_cds_high_FST_LG$X)
+View(uniq_poolfstat_cds_high_FST_LG)
+```
+
+Run PCA
+
+```
+# Build pcadapt matrix
+
+ref_GL <- pooldata_sub@refallele.readcount[,1]
+ref_LF <- pooldata_sub@refallele.readcount[,2]
+ref_SF <- pooldata_sub@refallele.readcount[,3]
+ref_LL <- pooldata_sub@refallele.readcount[,4]
+
+alt_GL <- pooldata_sub@readcoverage[,1] - pooldata_sub@refallele.readcount[,1]
+alt_LF <- pooldata_sub@readcoverage[,2] - pooldata_sub@refallele.readcount[,2]
+alt_SF <- pooldata_sub@readcoverage[,3] - pooldata_sub@refallele.readcount[,3]
+alt_LL <- pooldata_sub@readcoverage[,4] - pooldata_sub@refallele.readcount[,4]
+
+fq_GL <- ref_GL/pooldata_sub@readcoverage[,1]
+fq_LF <- ref_LF/pooldata_sub@readcoverage[,2]
+fq_SF <- ref_SF/pooldata_sub@readcoverage[,3]
+fq_LL <- ref_LL/pooldata_sub@readcoverage[,4]
+
+# Different (?) from : SNP_biall$fq_SF <- ifelse(SNP_biall$ref==SNP_biall$SF1, SNP_biall$SF_ref/SNP_biall$SF_tot, SNP_biall$SF_alt/SNP_biall$SF_tot) 
+  
+pooldata_sub@snp.info[,1] <- substring(pooldata_sub@snp.info[,1],1,12)
+SNP <-paste(pooldata_sub@snp.info[,1],pooldata_sub@snp.info[,2] ,sep="_")
+
+mat_biall_poolfstat=matrix(nrow=4,ncol=5722762)
+colnames(mat_biall_poolfstat) <- SNP
+rownames(mat_biall_poolfstat)=c("GL","LF","SF","LL")
+
+mat_biall_poolfstat[1,]=fq_GL
+mat_biall_poolfstat[2,]=fq_LF
+mat_biall_poolfstat[3,]=fq_SF
+mat_biall_poolfstat[4,]=fq_LL
+
+mat_biall_poolfstat[1:4,1:10]
+
+#install.packages("pcadapt")
+library(pcadapt)
+
+mat_biall_pca <- mat_biall_poolfstat[1:4,]
+pca<-read.pcadapt(mat_biall_pca, type = "pool")
+res <- pcadapt(pca)
+summary(res)
+
+# PC scores
+res$scores[,1] # Premier axe
+res$scores[,2] # Second axe
+
+
+hist(res$pvalues, xlab = "p-values", main = NULL, breaks = 50, col = "orange")
+# Confirms that most of the p-values follow an uniform distribution. The excess of small p-values indicates the presence of outliers.
+
+
+poplist.names <- c("German Lab", "London Field","Sweden Field","London Lab")
+plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 vs PC2
+
+plot(res, option = "manhattan")
+
+```
+
+UGPMA can be compute on FST data :
+
+``` 
+library("phangorn")
+matrix_upgma_auto <- PairwiseFST_all$PairwiseFSTmatrix
+# Or manually:
+matrix_upgma=matrix(nrow=4,ncol=4) # pour LG, sinon changer 
+colnames(matrix_upgma)=c("GL","LF","SF","LL")
+rownames(matrix_upgma)=c("GL","LF","SF","LL")
+matrix_upgma[c(1,2,3,4),c(1,2,3,4)]=0
+
+# Order : GL_vs_LF, GL_vs_SF, GL_vs_LL, LF_vs_SF, LF_vs_LL, SF_vs_LL
+matrix_upgma[2,1]=mean(PairwiseFST_all$PairwiseSnpFST[,1], na.rm=T)
+matrix_upgma[1,2]=mean(PairwiseFST_all$PairwiseSnpFST[,1], na.rm=T)
+
+matrix_upgma[3,1]=mean(PairwiseFST_all$PairwiseSnpFST[,2], na.rm=T)
+matrix_upgma[1,3]=mean(PairwiseFST_all$PairwiseSnpFST[,2], na.rm=T)
+
+matrix_upgma[4,1]=mean(PairwiseFST_all$PairwiseSnpFST[,3], na.rm=T)
+matrix_upgma[1,4]=mean(PairwiseFST_all$PairwiseSnpFST[,3], na.rm=T)
+
+matrix_upgma[2,3]=mean(PairwiseFST_all$PairwiseSnpFST[,4], na.rm=T)
+matrix_upgma[3,2]=mean(PairwiseFST_all$PairwiseSnpFST[,4], na.rm=T)
+
+matrix_upgma[2,4]=mean(PairwiseFST_all$PairwiseSnpFST[,5], na.rm=T)
+matrix_upgma[4,2]=mean(PairwiseFST_all$PairwiseSnpFST[,5], na.rm=T)
+
+matrix_upgma[3,4]=mean(PairwiseFST_all$PairwiseSnpFST[,6], na.rm=T)
+matrix_upgma[4,3]=mean(PairwiseFST_all$PairwiseSnpFST[,6], na.rm=T)
+
+data_upgma_auto <- upgma(matrix_upgma_auto, method = "average")
+data_upgma <- upgma(matrix_upgma, method = "average")
+
+plot(data_upgma)
+plot(data_upgma_auto)
+``` 
+![Image 4](order_length.png)
+
+
 ### Estimate genetic polymorphism
 
+
+
+Convert to use on BayPass :
+
+```{r}
+setwd("~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/SNPs/Poolfstat")
+
+pooldata2genobaypass(pooldata,
+                     writing.dir = getwd(), # directory where to create the files
+                     prefix = "poolfstatdata_110221", # prefix used for output file names
+                     subsamplesize = -1) # all SNPs are considered in the output
+                     # subsamplingmethod = "thinning")
+
+pooldata2genobaypass(pooldata_sub,
+                     writing.dir = getwd(), # directory where to create the files
+                     prefix = "poolfstatdata_sub_110221", # prefix used for output file names
+                     subsamplesize = -1) # all SNPs are considered in the output
+                     # subsamplingmethod = "thinning")
+```
 
 
 
