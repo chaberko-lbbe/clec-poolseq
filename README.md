@@ -5,7 +5,7 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 ### Table of Contents
 
 - **[Mapping and processing Pool-seq genomes](#Mapping-and-processing-Pool-seq-genomes)**
-	- [Install tools](#Install-tools)
+	- [Installing tools](#Installing-tools)
 	- [Getting the data](#Getting-the-data)
 	- [Trimming](#Trimming)
 	- [Removing duplicates](#Removing-duplicates)
@@ -13,10 +13,17 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Analysing coverage](#Analysing-coverage)
 
 - **[Genetic differenciation of populations](#Genetic-differenciation-of-populations)**
-	- [Install tools](#Install-tools)
+	- [Installing tools](#Installing-tools)
 	- [Detecting SNPs](#Detecting-SNPs)
 	- [Compute FST](#Compute-FST)
-	- [Estimate genetic polymorphism](#Estimate-genetic-polymorphism)
+
+- **[Genetic polymorphism within populations](#Genetic-polymorphism-within-populations)**
+	- [Installing tools](#Installing-tools)
+	- [Compute pi and Tajima's D](#Compute-pi-and-Tajimas-D)
+
+- **[Evidence of selection](#Evidence-of-selection)**
+	- [Installing tools](#Installing-tools)
+	- [Identifying genetic markers under selection](#Identifying-genetic-markers-under-selection)
 
 ## Mapping and processing Pool-seq genomes
 
@@ -372,7 +379,7 @@ We will have to download a few soft.
 
 ### Install tools
 
-PoPoolation & PoPoolation2 :
+PoPoolation2 :
 ``` 
 chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation_1.2.2
 chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation2_1201
@@ -467,7 +474,6 @@ plot(res, option = "manhattan")
 <img src="ACP_poolfstat.png" width="600" height="450" style="background:none; border:none; box-shadow:none;">
 
 PCA allows us to detect the SNPs distinguishing the 4 strains: London Field and London Lab seems poorly genetically differenciated. The genetic differenciation appears to be related to the geographical repartition. 
-
 
 
 ### Compute FST
@@ -927,7 +933,7 @@ plot(data_upgma_auto)
 ``` 
 <img src="plot-pairwiseFST.png" width="400" height="400" style="background:none; border:none; box-shadow:none;">
 
-We can also use PoPoolation 2 to compare the populations between each other using FST computation. Despite FST calculation by PoPoolation 2 has been criticised (Hivert *et al.*, 2018), the main advantage of using this tool is that those FST can be compared with Tajima's D or pi compute with PoPoolation 1
+We can also use PoPoolation 2 to compare the populations between each other using FST computation. Despite FST calculation by PoPoolation 2 has been criticised (Hivert *et al.*, 2018), the main advantage of using this tool is that those FST can be compared with Tajima's D or pi compute with PoPoolation 1.
 
 1st step // Indexing & Pileuping
 
@@ -963,9 +969,18 @@ perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/fst-sliding.pl --input all.
 perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/fst-sliding.pl --input all.sync --output all_w500.fst --min-count 5 --min-coverage 10 --max-coverage 200 --min-covered-fraction 0.0 --window-size 500 --step-size 500 --pool-size 30
 ```
 
-### Estimate genetic polymorphism
+### Genetic polymorphism within populations
 
 We can use PoPoolation 1 to compute Tajima's D or pi.
+
+## Installing tools
+
+PoPoolation1 :
+``` 
+chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation_1.2.2
+```
+
+## Compute pi and Tajima's D
 
 1st step // Indexing & Pileuping
 
@@ -1022,9 +1037,23 @@ perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/Variance-sliding.pl --fastq
 # Default value for --min-covered-fraction: 0.5 
 ```
 
-We can convert Poolfstat SNPs data to BayPass layout:
+### Evidence of selection
 
-```{r}
+We performed a contrast analysis to identify SNPs associated with populations ecotypes. This trait (populations' ecotype) being binary, we can use C2 statistic (Olazcuaga et al., 2019) to identify those SNPs, rather than parametric models used to estimates Bayes' Factor (BF).
+
+## Installing tools
+
+BayPass :
+``` 
+/beegfs/data/soft/BayPass/baypass_2.2/sources/g_baypass
+```
+
+## Identifying genetic markers under selection
+
+1st step // Input data for BayPass:
+We can convert Poolfstat SNPs data into BayPass input format.
+
+```
 setwd("~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/SNPs/Poolfstat")
 
 pooldata2genobaypass(pooldata,
@@ -1040,6 +1069,47 @@ pooldata2genobaypass(pooldata_sub,
                      # subsamplingmethod = "thinning")
 ```
 
+This file contains reads number for each of n SNPs markers of each n sampled populations. It is a matrix with n lines (corresponding to n SNPs) and 2 x n columns (twice the populations number).
+
+Extract:
+```
+poolfstatdata_110221.genobaypass
+3 7 0 7 0 3 0 10
+8 2 4 2 4 0 6 5
+```
+This corresponds to 2 markers and 4 populations: 1st SNP -> 3 copies of 1st allele in 1st population, 7 copies of 2nd allele in 1st population,... 0 copies of 1st allele in 2nd population, 3 copies of 2nd allele in 2nd population,...
+
+We need two other files to make our analysis:
+
+A file containing haploid sizes for pool-seq data:
+```
+poolfstatdata_110221.poolsize
+30 30 30 30
+```
+
+And a contrast file, to do analysis in association with binary traits. It allows calculate contrast of standardised allele frequencies between 2 population groups. The group membership for each population is '1' for the first group, '-1' for the alternative group, and '0' if excluded from the contrast analysis.
+
+For populations in this order: German Lab (GL), London Field (LF), Sweden Field (SF), London Lab (LL) ; we want to compute a contrast between Lab and Field populations:
+```
+poolfstatdata_110221.ecotype
+1 -1 -1 1 
+```
+
+The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6.
+
+```
+#!/bin/bash
+#SBATCH --cpus-per-task=1
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_test.error
+#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_test.out
+#SBATCH -J baypass_test_Cimex_lectularius
+
+/beegfs/data/soft/BayPass/baypass_2.2/sources/g_baypass -gfile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.geno -poolsizefile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.poolsize -d0yij 6 \
+-contrastfile beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.ecotype -efile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.ecotype \
+-outprefix poolfstatdata_110221
+```
 
 
 
