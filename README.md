@@ -1152,4 +1152,3 @@ abline(v=20,lty=2) # BF threshold for decisive evidence (according to Jeffreys' 
 
 
 
-
