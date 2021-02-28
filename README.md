@@ -349,146 +349,8 @@ cat wolbachia_cimex_genome.fna g-proteobacteria_genome.fna clostridium_genome.fn
 /beegfs/data/chaberkorn/Tools/myconda/bin/makeblastdb -in data_bacteria.fasta -dbtype nucl -out data_bacteria 
 /beegfs/data/chaberkorn/Tools/myconda/bin/blastn -query /beegfs/data/chaberkorn/PoolSeq_Clec/Genomes/ref_NC_030043.fa -db data_cimex -out scaff_030043_vs_data_cimex.blastn -outfmt 6 -max_target_seqs 5 -evalue 10e-1
 ```
-Open "cimex_vs_data_TE.blastn" on Excel, convert in CSV:
 
-```
-data_TE <- read.csv("~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/cimex_vs_data_TE.blastn.csv", sep=";",h=F)
-colnames(data_TE) <- c("query_id","subject_id","identity","alignement_length","mismatches","gap_opens","qstart","qend","sstart","send","evalue","bitscore")
-
-hist(log(data_TE$evalue)) # Artefact à 0
-summary(data_TE$evalue)
-
-# spliter par query pour mettre ensembles les scaffolds
-liste=base::split(x=data_TE, f=data_TE$query_id) # 1300
-length(liste)
-
-# lapply
-x=liste[[1]]
-library(intervals)
-i=Intervals(x[,c("qstart", "qend")])
-union=interval_union(x = i)
-as.data.frame(union)
-
-liste_unions=lapply(X = liste, FUN = function(x){
-  x=x[x$evalue<10^-10,]
-  i=Intervals(x[,c("qstart", "qend")])
-  union=interval_union(x = i)
-  union=as.data.frame(union)
-  return(union)
-})
-
-length(liste_unions)
-liste_unions[1] # Premier élément = NC_030043.1 -> mitochondrial
-liste_unions[2]
-
-longueur=lapply(X = liste_unions, FUN=function(x){
-  res=dim(x)[1]
-  return(res)
-})
-
-head(longueur)
-
-dataframe_bed=do.call(rbind.data.frame, liste_unions)
-head(dataframe_bed)
-noms_scaff=rep.int(names(liste_unions), times =longueur)
-head(noms_scaff)
-dataframe_bed$V3=noms_scaff
-head(dataframe_bed)
-
-dataframe_bed=dataframe_bed[, c(3,1,2)]
-head(dataframe_bed)
-dim(dataframe_bed) # 22914 lignes
-
-hist(dataframe_bed$V2-dataframe_bed$V1) # Vérifier que tout est strictement >0 (end toujours > start)
-dataframe_bed=dataframe_bed[-1,] # Enlever NC (mitochondrial)
-colnames(dataframe_bed) <- c("query_id","qstart","qend")
-
-write.table(dataframe_bed, file = "~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/cimex_vs_data_TE.blastn.bed", row.names = F, quote=F)
-
-# Ajouter la colonne subjecti_id
-head(dataframe_bed)
-dim(dataframe_bed) # 22913
-head(data_TE)
-dim(data_TE) # 78926 
-
-library(dplyr)
-test2 <- left_join(dataframe_bed, data_TE) %>% select(query_id,qstart,qend,subject_id)
-head(test2)
-dim(test2) # 26477 --> NA quand pas de TE correspondant à la région
-View(data_TE)
-
-# Marche pas : deux régions accolées en 1 unique --> ne retient aucune donnée de subject_id : traiter manuellement ?
-
-# data_TE :
-# NW_019392631.1	rnd-1_family-19#LINE/Penelope	4863	4920
-#	NW_019392631.1	rnd-1_family-19#LINE/Penelope	4920	4993
-
-# test2 :
-# NW_019392631.1	4863	4993	NA
-
-# Contre-exemple : deux régions superposées --> ne retient que la première ligne
-
-# data_TE :
-# NW_019392631.1	rnd-1_family-58#LINE/LOA	10269	11010	
-#	NW_019392631.1	rnd-6_family-1023#LINE/LOA	10277	11010
-
-# test2 :
-# NW_019392631.1	10269	11010	rnd-1_family-58#LINE/LOA
-```
-Tableau trop lourd : on commence par compter combien il y a de lignes
-
-wc -l data_cimex_2.1_vs_data_cimex_1.1.blastn
-654686868
-
-On ouvre donc déjà la première moitié du tableau : nrow=327343434 ; puis on l'ignore : skip=327343434
-
-```{r}
-# /beegfs/data/soft/R-3.5.2/bin/R
-
-data <- read.table("data_cimex_2.1_vs_data_cimex_1.1.blastn", nrows= 327343434) 
-colnames(data) <- c("query_id","subject_id","identity","alignement_length","mismatches","gap_opens","qstart","qend","sstart","send","evalue","bitscore")
-data <- data[,c(1:2,7:11)]
-
-test <- data[grep("^lg.*", data$subject_id), ]
-
-# decouper la colonne subject_id en 2 : enleve partie "lg"
-data$subject_id <- substr(data$subject_id,3,4) 
-
-library(dplyr)
-
-#TESTS :
-toto <- unique(data[c("query_id","subject_id")])
-test2 <- data %>% group_by(query_id) %>% summarise(subject_id = max(subject_id, na.rm=TRUE))
-test3 <- data %>% group_by(query_id) %>% summarise()
-test4 <- aggregate(data, by=c('query_id', 'subject_id' ), FUN=function(x) {x})
-
-#write.table(test2, file = "data_cimex_2.1_vs_data_cimex_1.1.blastn-part1.bed", row.names = F, quote=F)
-#write.table(test2, file = "data_cimex_2.1_vs_data_cimex_1.1.blastn-part2.bed", row.names = F, quote=F)
-
-data2 <- read.table("data_cimex_2.1_vs_data_cimex_1.1.blastn", skip= 327343434) # ncol=c(1:2;7:11)
-
-colnames(data2) <- c("query_id","subject_id","identity","alignement_length","mismatches","gap_opens","qstart","qend","sstart","send","evalue","bitscore")
-
-test <- data2[grep("^lg.*", data2$subject_id), ]
-
-# decouper la colonne subject_id en 2 : enleve partie "lg"
-test$subject_id <- substr(test$subject_id,3,4) 
-head(test)
-
-write.table(test, file = "test_data_cimex_2.1_vs_data_cimex_1.1.blastn-part2", row.names = F, quote=F)
-
-library(dplyr)
-test2 <- test %>% group_by(query_id) %>% 
-  summarise(subject_id = max(subject_id, na.rm=TRUE))
-
-#write.table(test2, file = "data_cimex_2.1_vs_data_cimex_1.1.blastn-part1.bed", row.names = F, quote=F)
-write.table(test2, file = "data_cimex_2.1_vs_data_cimex_1.1.blastn-part2.bed", row.names = F, quote=F)
-```
-
-
-
-
-
+--> Donner les résultats sans toutes les analyses..
 
 
 
@@ -833,22 +695,7 @@ colnames(data_FST_w500) <- c("scaffold","window","GL_vs_LF","GL_vs_SF","GL_vs_LL
 write.csv(data_FST_w500, file = "~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/SNPs/Poolfstat data/data_FST_w500.csv", 
           sep = ",", col.names = TRUE)
 
-# Same with 1kb window
-data_FST_w1000 <- data_FST %>%
-  group_by(scaffold, grp = ceiling(data_FST$pos/1000)*1000) %>%
-  summarise_at(
-    .vars= vars(GL_vs_LF, GL_vs_SF, GL_vs_LL, LF_vs_SF, LF_vs_LL, SF_vs_LL), 
-    .funs =  mean, na.rm = TRUE)
-
-count_snp <- data_FST %>%
-  group_by(scaffold, grp = ceiling(data_FST$pos/1000)*1000) %>% 
-  summarise(n = n())
-
-data_FST_w1000 <- cbind(data_FST_w1000,count_snp)
-data_FST_w1000 <- subset(data_FST_w1000, select=-c(scaffold...9,grp...10))
-data_FST_w1000 <- as.data.frame(data_FST_w1000)
-colnames(data_FST_w1000) <- c("scaffold","window","GL_vs_LF","GL_vs_SF","GL_vs_LL",
-                             "LF_vs_SF","LF_vs_LL", "SF_vs_LL","count_snp")
+# Do the same with 1kb window: data_FST_w1000
 write.csv(data_FST_w1000, file = "~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/SNPs/Poolfstat data/data_FST_w1000.csv", 
           sep = ",", col.names = TRUE)
 
@@ -870,60 +717,29 @@ boxplot(data_FST_w500$GL_vs_LF, data_FST_w500$GL_vs_SF, data_FST_w500$GL_vs_LL, 
         ylab="FSTs distribution",
         names=c("GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL"))
 
-# For 1000 windows :
-boxplot(data_FST_w1000$GL_vs_LF, data_FST_w1000$GL_vs_SF, data_FST_w1000$GL_vs_LL, data_FST_w1000$LF_vs_SF, 
-        data_FST_w1000$LF_vs_LL, data_FST_w1000$SF_vs_LL, 
-        border=c("#F8766D","#D89000","#72B000","#00C19C","#00B0F6","#CF78FF"), 
-        xlab="Strains comparisons", 
-        ylab="FSTs distribution",
-        names=c("GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL"))
-
-# Zoom in w1000 boxplot :
-boxplot(data_FST_w1000$GL_vs_LF, data_FST_w1000$GL_vs_SF, data_FST_w1000$GL_vs_LL, data_FST_w1000$LF_vs_SF, 
-        data_FST_w1000$LF_vs_LL, data_FST_w1000$SF_vs_LL, 
-        border=c("#F8766D","#D89000","#72B000","#00C19C","#00B0F6","#CF78FF"), 
-        ylim=c(-0.2,0.4),
-        xlab="Strains comparisons", 
-        ylab="FSTs distribution",
-        names=c("GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL"))
+# Do the same with 1kb window
 ```
 
 <img src="FST-all-windows.png" style="background:none; border:none; box-shadow:none;">
 
+Then, we want to identify high FST values for all comparisons between Lab and Field strains.
+It is therefore possible to visualise these data by plotting them on the Linkage Groups (LGs), or without the information related to the LGs, so that no information is lost (due to the scaffolds that are not mapped on any LG, and thus cannot appear on the graph).
 
-
-
-
-
-
-
-## Identifier les FSTs outliers :
-
-Visualiser les FST en les plotant sur les LG :
-Or without LG info -> go line 335
-
-```{r}
+```
 tab_corresp_LG <- read.csv(file="~/Desktop/CloudStation/THESE/RADSeq/scaff_agg_uniq.csv", sep=",", header=TRUE)
 
-FST_tab_LG <- merge(data_FST_w500, tab_corresp_LG) # merge by scaffold car meme colonne -> ajoute la colonne LG
+# Using w500 table
+# Subset with only scaffolds associated with LGs
+FST_tab_LG <- merge(data_FST_w500, tab_corresp_LG) # merge by scaffold, add LG column
 FST_tab_LG$LG <- as.factor(FST_tab_LG$LG)
 FST_tab_LG <- subset(FST_tab_LG, select=-c(X))
 
-head(FST_tab_LG)
-# Subset avec uniquement les scaff auxquels des LG sont associes
-```
-
-
-```{r}
 FST_tab_LG$Colour="black"
-
 FST_tab_LG$Colour[(FST_tab_LG$GL_vs_LF > quantile(FST_tab_LG$GL_vs_LF, 0.95, na.rm=T) 
                    & FST_tab_LG$GL_vs_SF > quantile(FST_tab_LG$GL_vs_SF, 0.95, na.rm=T)
                    & FST_tab_LG$LF_vs_LL > quantile(FST_tab_LG$LF_vs_LL, 0.95, na.rm=T)
                    & FST_tab_LG$SF_vs_LL > quantile(FST_tab_LG$SF_vs_LL, 0.95, na.rm=T))]="red"
 summary(as.factor(FST_tab_LG$Colour)) # 368 with 0.95, 17 with 0.99 
-
-#  Missing values and NaN are not allowed if 'na.rm' is FALSE (default value)
 
 library(dplyr)
 FST_tab_LG <- FST_tab_LG %>% arrange(window)
@@ -931,7 +747,6 @@ FST_tab_LG <- FST_tab_LG %>% arrange(scaffold)
 FST_tab_LG <- FST_tab_LG %>% arrange(Colour)
 
 # Define subset for each chromosome :
-
 chr1 <- subset(FST_tab_LG, LG == 1)
 chr2 <- subset(FST_tab_LG, LG == 2)
 chr3 <- subset(FST_tab_LG, LG == 3)
@@ -946,36 +761,28 @@ chr11 <- subset(FST_tab_LG, LG == 11)
 chr12 <- subset(FST_tab_LG, LG == 12)
 chr13 <- subset(FST_tab_LG, LG == 13)
 chr14 <- subset(FST_tab_LG, LG == 14)
-head(chr1)
 
-# Open a script and copy paste for each combination :
-summary(FST_tab_LG) # to define ylim :
-View(FST_tab_LG)
-
+summary(FST_tab_LG) # to define ylim
+# Copy paste for each combination (LF_vs_LL, GL_vs_SF,...) :
 par(mfrow=c(3,5))
-plot(x=chr1$window,y=chr1$LF_vs_LL, ylim = c(-0.15,1), ylab="", xlab="", pch=20, main="Chr 1", col=chr1$Colour)
-plot(x=chr2$window,y=chr2$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 2", col=chr2$Colour)
-plot(x=chr3$window,y=chr3$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 3", col=chr3$Colour)
-plot(x=chr4$window,y=chr4$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 4", col=chr4$Colour)
-plot(x=chr5$window,y=chr5$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 5", col=chr5$Colour)
-plot(x=chr6$window,y=chr6$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 6", col=chr6$Colour)
-plot(x=chr7$window,y=chr7$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 7", col=chr7$Colour)
-plot(x=chr8$window,y=chr8$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 8", col=chr8$Colour)
-plot(x=chr9$window,y=chr9$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 9", col=chr9$Colour)
-plot(x=chr10$window,y=chr10$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 10", col=chr10$Colour)
-plot(x=chr11$window,y=chr11$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 11", col=chr11$Colour)
-plot(x=chr12$window,y=chr12$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 12", col=chr12$Colour)
-plot(x=chr13$window,y=chr13$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 13", col=chr13$Colour)
-plot(x=chr14$window,y=chr14$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 14", col=chr14$Colour)
-
-poolfstat_high_FST_LG <- subset(FST_tab_LG, Colour=="red")
-View(poolfstat_high_FST_LG)
-View(chr11)
+plot(x=chr1$X,y=chr1$LF_vs_LL, ylim = c(-0.15,1), ylab="", xlab="", pch=20, main="Chr 1", col=chr1$Colour)
+plot(x=chr2$X,y=chr2$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 2", col=chr2$Colour)
+plot(x=chr3$X,y=chr3$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 3", col=chr3$Colour)
+plot(x=chr4$X,y=chr4$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 4", col=chr4$Colour)
+plot(x=chr5$X,y=chr5$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 5", col=chr5$Colour)
+plot(x=chr6$X,y=chr6$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 6", col=chr6$Colour)
+plot(x=chr7$X,y=chr7$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 7", col=chr7$Colour)
+plot(x=chr8$X,y=chr8$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 8", col=chr8$Colour)
+plot(x=chr9$X,y=chr9$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 9", col=chr9$Colour)
+plot(x=chr10$X,y=chr10$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 10", col=chr10$Colour)
+plot(x=chr11$X,y=chr11$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 11", col=chr11$Colour)
+plot(x=chr12$X,y=chr12$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 12", col=chr12$Colour)
+plot(x=chr13$X,y=chr13$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 13", col=chr13$Colour)
+plot(x=chr14$X,y=chr14$LF_vs_LL, ylim = c(0,1), ylab="", xlab="", pch=20, main="Chr 14", col=chr14$Colour)
 
 # How many high FST in each chr for LF vs LL ?
-
 chr1_high <- subset(FST_tab_LG, LG == 1 & Colour == "red") # 27
-chr2_high <- subset(FST_tab_LG, LG == 2 & Colour == "red") # 68
+chr2_high <- subset(FST_tab_LG, LG == 2 & Colour == "red") # 68 > 1st most important content
 chr3_high <- subset(FST_tab_LG, LG == 3 & Colour == "red") # 35
 chr4_high <- subset(FST_tab_LG, LG == 4 & Colour == "red") # 21
 chr5_high <- subset(FST_tab_LG, LG == 5 & Colour == "red") # 14
@@ -984,21 +791,24 @@ chr7_high <- subset(FST_tab_LG, LG == 7 & Colour == "red") # 23
 chr8_high <- subset(FST_tab_LG, LG == 8 & Colour == "red") # 31
 chr9_high <- subset(FST_tab_LG, LG == 9 & Colour == "red") # 13
 chr10_high <- subset(FST_tab_LG, LG == 10 & Colour == "red") # 11
-chr11_high <- subset(FST_tab_LG, LG == 11 & Colour == "red") # 66
+chr11_high <- subset(FST_tab_LG, LG == 11 & Colour == "red") # 66 > 2nd most important content
 chr12_high <- subset(FST_tab_LG, LG == 12 & Colour == "red") # 8
 chr13_high <- subset(FST_tab_LG, LG == 13 & Colour == "red") # 10
 chr14_high <- subset(FST_tab_LG, LG == 14 & Colour == "red") # 2
 
+poolfstat_high_FST_LG <- subset(FST_tab_LG, Colour=="red")
 write.table(poolfstat_high_FST_LG, file="poolfstat_high_FST_LG.txt", sep=",")
+```
+<img src="Poolfstat_FST_w500_LF_vs_LL.png" width="800" height="600" style="background:none; border:none; box-shadow:none;">
 
-View(chr11_high)
+```
 # Find associate genes
 
 scaff_genes=read.table("scaff_genes.txt") 
 scaff_genes$seqid <- substring(scaff_genes$seqid,1,12)
 View(scaff_genes)
 
-# A faire sur le cluster :
+# To do on cluster :
 # scp /Users/chloe/Documents/Cluster/poolfstat_high_FST_LG.txt chaberkorn@pbil-gates.univ-lyon1.fr:/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/
 # cd /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/
 # /beegfs/data/soft/R-3.5.2/bin/R
@@ -1023,11 +833,9 @@ colnames(newtest_genes) <- c("scaffold", "start","end","gene","length","position
 newtest_genes$scaffold <- substring(newtest_genes$scaffold,1,12)
 
 high_FST=read.table("poolfstat_high_FST_LG.txt", header=T, sep=",") 
-poolfstat_genes_high_FST_LG <- right_join(newtest_genes, high_FST)
-#> Joining, by = c("scaffold", "position")
+poolfstat_genes_high_FST_LG <- right_join(newtest_genes, high_FST) # Joining, by = c("scaffold", "position")
 
 write.table(newtest_genes, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/newtest_genes.txt", sep=",")
-
 write.table(poolfstat_genes_high_FST_LG, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/poolfstat_genes_high_FST_LG.txt", sep=",")
 
 # Back to R computer session
@@ -1038,36 +846,31 @@ View(poolfstat_genes_high_FST_LG)
 # IF we have gene ID, merge with scaff_cds table to have product column
 
 scaff_cds=read.table("~/Desktop/CloudStation/THESE/CNV/scaff_cds.txt") 
-head(scaff_cds)
 
 library(tidyverse)
 scaff_cds <- scaff_cds %>%
   select(gene, product)
-View(scaff_cds)
 
 poolfstat_cds_high_FST_LG <- left_join(poolfstat_genes_high_FST_LG,scaff_cds, by=c("gene"))
-View(high_FST_cds)
 
 uniq_poolfstat_cds_high_FST_LG <- poolfstat_cds_high_FST_LG[!duplicated(poolfstat_cds_high_FST_LG[,c('start','position')]),]
 uniq_poolfstat_cds_high_FST_LG$X <- 1:length(uniq_poolfstat_cds_high_FST_LG$X)
-View(uniq_poolfstat_cds_high_FST_LG)
 ```
 
-Without LG :
+Now, we can do the same analyse without LG :
 
-```{r}
+```
 data_FST_w500$Colour="black"
 data_FST_w500$Colour[(data_FST_w500$GL_vs_LF > quantile(data_FST_w500$GL_vs_LF, 0.95, na.rm=T) 
                    & data_FST_w500$GL_vs_SF > quantile(data_FST_w500$GL_vs_SF, 0.95, na.rm=T)
                    & data_FST_w500$LF_vs_LL > quantile(data_FST_w500$LF_vs_LL, 0.95, na.rm=T)
                    & data_FST_w500$SF_vs_LL > quantile(data_FST_w500$SF_vs_LL, 0.95, na.rm=T))]="red"
 
-summary(as.factor(data_FST_w500$Colour)) # 721 with 0.95, 39 with 0.99 
+summary(as.factor(data_FST_w500$Colour)) # 721 with 0.95, 39 with 0.99 -> keep 0.95
 
 library(dplyr)
 data_FST_w500 <- data_FST_w500 %>% arrange(window)
 data_FST_w500 <- data_FST_w500 %>% arrange(scaffold)
-head(data_FST_w500)
 
 summary(data_FST_w500) # to define ylim : (-0.15,1)
 data_FST_w500$X <- 1:length(data_FST_w500$scaffold)
@@ -1075,107 +878,16 @@ summary(data_FST_w500$X)
 
 data_FST_w500 <- data_FST_w500 %>% arrange(Colour)
 
+# Plot for all FST combinaison (LF_vs_LL, GL_vs_LF,...) : 
 plot(x=data_FST_w500$X,y=data_FST_w500$LF_vs_LL, ylim = c(-0.15,1), ylab="", xlab="", pch=20, main="FST w500 LF_vs_LL", col=data_FST_w500$Colour)
 
 poolfstat_high_FST <- subset(data_FST_w500, Colour=="red")
-View(poolfstat_high_FST)
 
 # And with w1000 window :
-
-data_FST_w1000$Colour="black"
-data_FST_w1000$Colour[(data_FST_w1000$GL_vs_LF > quantile(data_FST_w1000$GL_vs_LF, 0.95, na.rm=T) 
-                   & data_FST_w1000$GL_vs_SF > quantile(data_FST_w1000$GL_vs_SF, 0.95, na.rm=T)
-                   & data_FST_w1000$LF_vs_LL > quantile(data_FST_w1000$LF_vs_LL, 0.95, na.rm=T)
-                   & data_FST_w1000$SF_vs_LL > quantile(data_FST_w1000$SF_vs_LL, 0.95, na.rm=T))]="red"
-
-summary(as.factor(data_FST_w1000$Colour)) # 411 with 0.95, 24 with 0.99 
-
-library(dplyr)
-data_FST_w1000 <- data_FST_w1000 %>% arrange(window)
-data_FST_w1000 <- data_FST_w1000 %>% arrange(scaffold)
-head(data_FST_w1000)
-
-summary(data_FST_w1000) # to define ylim : (-0.15,1)
-data_FST_w1000$X <- 1:length(data_FST_w1000$scaffold)
-summary(data_FST_w1000$X)
-
-data_FST_w1000 <- data_FST_w1000 %>% arrange(Colour)
-
-plot(x=data_FST_w1000$X,y=data_FST_w1000$LF_vs_LL, ylim = c(-0.15,1), ylab="", xlab="", pch=20, main="FST w1000 LF_vs_LL", col=data_FST_w1000$Colour)
-
-plot(x=data_FST_w1000$X,y=data_FST_w1000$GL_vs_LF, ylim = c(-0.15,1), ylab="", xlab="", pch=20, main="FST w1000 LF_vs_LL", col=data_FST_w1000$Colour)
-
-plot(x=data_FST_w1000$X,y=data_FST_w1000$GL_vs_SF, ylim = c(-0.15,1), ylab="", xlab="", pch=20, main="FST w1000 LF_vs_LL", col=data_FST_w1000$Colour)
-
-plot(x=data_FST_w1000$X,y=data_FST_w1000$SF_vs_LL, ylim = c(-0.15,1), ylab="", xlab="", pch=20, main="FST w1000 LF_vs_LL", col=data_FST_w1000$Colour)
-
-poolfstat_high_FST_w1000 <- subset(data_FST_w1000, Colour=="red")
-View(poolfstat_high_FST_w1000)
+# 411 with 0.95, 24 with 0.99 -> keep 0.95
 ```
 
-
-# Run PCA
-
-```{r}
-# Build pcadapt matrix
-
-ref_GL <- pooldata_sub@refallele.readcount[,1]
-ref_LF <- pooldata_sub@refallele.readcount[,2]
-ref_SF <- pooldata_sub@refallele.readcount[,3]
-ref_LL <- pooldata_sub@refallele.readcount[,4]
-
-alt_GL <- pooldata_sub@readcoverage[,1] - pooldata_sub@refallele.readcount[,1]
-alt_LF <- pooldata_sub@readcoverage[,2] - pooldata_sub@refallele.readcount[,2]
-alt_SF <- pooldata_sub@readcoverage[,3] - pooldata_sub@refallele.readcount[,3]
-alt_LL <- pooldata_sub@readcoverage[,4] - pooldata_sub@refallele.readcount[,4]
-
-fq_GL <- ref_GL/pooldata_sub@readcoverage[,1]
-fq_LF <- ref_LF/pooldata_sub@readcoverage[,2]
-fq_SF <- ref_SF/pooldata_sub@readcoverage[,3]
-fq_LL <- ref_LL/pooldata_sub@readcoverage[,4]
-
-# Different (?) from : SNP_biall$fq_SF <- ifelse(SNP_biall$ref==SNP_biall$SF1, SNP_biall$SF_ref/SNP_biall$SF_tot, SNP_biall$SF_alt/SNP_biall$SF_tot) 
-  
-pooldata_sub@snp.info[,1] <- substring(pooldata_sub@snp.info[,1],1,12)
-SNP <-paste(pooldata_sub@snp.info[,1],pooldata_sub@snp.info[,2] ,sep="_")
-
-mat_biall_poolfstat=matrix(nrow=4,ncol=5722762)
-colnames(mat_biall_poolfstat) <- SNP
-rownames(mat_biall_poolfstat)=c("GL","LF","SF","LL")
-
-mat_biall_poolfstat[1,]=fq_GL
-mat_biall_poolfstat[2,]=fq_LF
-mat_biall_poolfstat[3,]=fq_SF
-mat_biall_poolfstat[4,]=fq_LL
-
-mat_biall_poolfstat[1:4,1:10]
-
-#install.packages("pcadapt")
-library(pcadapt)
-
-mat_biall_pca <- mat_biall_poolfstat[1:4,]
-pca<-read.pcadapt(mat_biall_pca, type = "pool")
-res <- pcadapt(pca)
-summary(res)
-
-# PC scores
-res$scores[,1] # Premier axe
-res$scores[,2] # Second axe
-
-
-hist(res$pvalues, xlab = "p-values", main = NULL, breaks = 50, col = "orange")
-# Confirms that most of the p-values follow an uniform distribution. The excess of small p-values indicates the presence of outliers.
-
-
-poplist.names <- c("German Lab", "London Field","Sweden Field","London Lab")
-plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 vs PC2
-
-plot(res, option = "manhattan")
-```
-
-
-
-
+<img src="FSTw1000.png" width="730" height="500" style="background:none; border:none; box-shadow:none;">
 
 UGPMA can be compute on FST Poolfstat data :
 
@@ -1240,28 +952,12 @@ perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/mpileup2sync.pl --fastq-typ
 2nd step // Compute allelic frequency differences
 
 ```
-#!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/fq_all.error
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/fq_all.out
-#SBATCH -J Genome_pileuping_Cimex_lectularius
-
 perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/snp-frequency-diff.pl --input all.sync --output-prefix all --min-count 5 --min-coverage 10 --max-coverage 200
 ```
 
 3nd step // Compute FST for each SNP or by using a sliding window
 
 ```
-#!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/fst_SF_LF.error
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/PoP2/fst_SF_LF.out
-#SBATCH -J Genome_pileuping_Cimex_lectularius
-
 perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/fst-sliding.pl --input all.sync --output all.fst --suppress-noninformative --min-count 5 --min-coverage 10 --max-coverage 200 --min-covered-fraction 0.0 --window-size 1 --step-size 1 --pool-size 30
 
 perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/fst-sliding.pl --input all.sync --output all_w500.fst --min-count 5 --min-coverage 10 --max-coverage 200 --min-covered-fraction 0.0 --window-size 500 --step-size 500 --pool-size 30
@@ -1303,25 +999,9 @@ perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/basic-pipeline/identify-gen
 
 nano filter_indels_GL.sh
 
-#!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/filter_indels_SF.error
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/filter_indels_SF.out
-#SBATCH -J Genome_indels_Cimex_lectularius
-
 perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/basic-pipeline/filter-pileup-by-gtf.pl --input /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SF.mpileup --gtf indels_SF.gtf --output SF.idf.mpileup
 
 nano unicov_GL.sh 
-
-#!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/unicov_GL.error
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/unicov_GL.out
-#SBATCH -J Genome_indels_Cimex_lectularius
 
 perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/basic-pipeline/subsample-pileup.pl --min-qual 20 --method withoutreplace --fastq-type sanger --max-coverage 39 --target-coverage 26 --input GL.idf.mpileup --output GL.cov.idf.mpileup
 ```
@@ -1330,14 +1010,6 @@ perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/basic-pipeline/subsample-pi
 
 ```
 nano variance-sliding_LF.sh
-
-#!/bin/bash
-#SBATCH --cpus-per-task=1
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/variance_LL.error
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Pileups/variance_LL.out
-#SBATCH -J Genome_variance_Cimex_lectularius
 
 # For Dtaij
 perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/Variance-sliding.pl --fastq-type sanger \
@@ -1367,17 +1039,6 @@ pooldata2genobaypass(pooldata_sub,
                      subsamplesize = -1) # all SNPs are considered in the output
                      # subsamplingmethod = "thinning")
 ```
-
-
-
-
-
-
-
-
-
-
-
 
 
 
