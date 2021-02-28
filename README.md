@@ -83,11 +83,7 @@ ILLUMINACLIP:TruSeq3-PE.fa:2:30:10:2:keepBothReads
   - 30 = palindrome clip threshold
   - 10 = simple clip threshold
   - 2 = min Adapter Length
-  - keepBothReads
-LEADING:3
-TRAILING:3 
 SLIDINGWINDOW:4:20 -> too high, use 15 instead
-MINLEN:50
 
 ```
 cd /beegfs/data/chaberkorn/PoolSeq_Clec/Trimmed
@@ -969,18 +965,18 @@ perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/fst-sliding.pl --input all.
 perl /beegfs/data/chaberkorn/Tools/popoolation2_1201/fst-sliding.pl --input all.sync --output all_w500.fst --min-count 5 --min-coverage 10 --max-coverage 200 --min-covered-fraction 0.0 --window-size 500 --step-size 500 --pool-size 30
 ```
 
-### Genetic polymorphism within populations
+## Genetic polymorphism within populations
 
 We can use PoPoolation 1 to compute Tajima's D or pi.
 
-## Installing tools
+### Installing tools
 
 PoPoolation1 :
 ``` 
 chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/popoolation_1.2.2
 ```
 
-## Compute pi and Tajima's D
+### Compute pi and Tajima's D
 
 1st step // Indexing & Pileuping
 
@@ -1037,18 +1033,18 @@ perl /beegfs/data/chaberkorn/Tools/popoolation_1.2.2/Variance-sliding.pl --fastq
 # Default value for --min-covered-fraction: 0.5 
 ```
 
-### Evidence of selection
+## Evidence of selection
 
 We performed a contrast analysis to identify SNPs associated with populations ecotypes. This trait (populations' ecotype) being binary, we can use C2 statistic (Olazcuaga et al., 2019) to identify those SNPs, rather than parametric models used to estimates Bayes' Factor (BF).
 
-## Installing tools
+### Installing tools
 
 BayPass :
 ``` 
 /beegfs/data/soft/BayPass/baypass_2.2/sources/g_baypass
 ```
 
-## Identifying genetic markers under selection
+### Identifying genetic markers under selection
 
 1st step // Input data for BayPass:
 We can convert Poolfstat SNPs data into BayPass input format.
@@ -1095,24 +1091,64 @@ poolfstatdata_110221.ecotype
 1 -1 -1 1 
 ```
 
+Since our data are very large (10 139 943 SNPs), we first divided the input file to have 10 000 SNPs/file, i.e. 1014 files:
+```
+cd /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/
+mkdir split_input
+split -dl 10000 poolfstatdata_110221.geno --additional-suffix=.geno /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/poolfstatdata_110221_
+```
+
+For each input, a corresponding job file is created:
+```
+mkdir split_output
+
+python
+>>> 
+import os 
+import re
+for filename in os.listdir("/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/"):
+        if filename.endswith(".geno"): 
+          nb=re.sub('.*110221_','',filename)
+          nb=re.sub('.geno','',nb)
+          w = open("/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/Cimex_BayPassjob_"+nb+".sh",'w')
+          w.write("#!/bin/bash\n")
+          w.write("#SBATCH --cpus-per-task=1\n")
+          w.write("#SBATCH --mem 10G\n")
+          w.write("#SBATCH --exclude=pbil-deb[27]\n")
+          w.write("#SBATCH -t 2:00:00\n")
+          w.write("#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_output/baypass_"+nb+".error\n")
+          w.write("#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_output/baypass_"+nb+".out\n")
+          w.write("#SBATCH -J Cimex_BaypassJob_"+nb+"\n")
+          w.write("date;hostname;pwd\n")
+          w.write("baypass=/beegfs/data/soft/BayPass/baypass_2.2/sources/g_baypass\n")
+          w.write("$baypass -gfile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/poolfstatdata_110221_"+nb+".geno -poolsizefile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.poolsize -d0yij 6 -contrastfile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.ecotype -efile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.ecotype -outprefix poolfstatdata_110221_"+nb+"")
+          w.write("date")
+```
+
 The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6.
-
+Estimate time running for BayPass on each sub-file is 45 minutes. We can lunch all jobs simultaneously using:
 ```
-#!/bin/bash
-#SBATCH --cpus-per-task=1
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_test.error
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_test.out
-#SBATCH -J baypass_test_Cimex_lectularius
-
-/beegfs/data/soft/BayPass/baypass_2.2/sources/g_baypass -gfile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.geno -poolsizefile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.poolsize -d0yij 6 \
--contrastfile beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.ecotype -efile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.ecotype \
--outprefix poolfstatdata_110221
+cd /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/
+for file in ls *sh
+do
+    sbatch $file
+done
 ```
 
+The resulting C2 contrasts (and BF) might then be plotted (and compared) as follows:
+```
+poolfstatdata_110221.ecotype.bf=read.table("poolfstatdata_110221contrast_summary_betai_reg.out",h=T)$BF.dB.
+poolfstatdata_110221.ecotype.C2=read.table("poolfstatdata_110221contrast_summary_contrast.out",h=T)
 
-
+# Check the behavior of the p-values associated to the C2
+hist(10**(-1*l poolfstatdata_110221.ecotype.C2$log10.1.pval.)
+,freq=F,breaks=50)
+abline(h=1)
+plot(poolfstatdata_110221.ecotype.bf, poolfstatdata_110221.ecotype.C2$log10.1.pval.,
+xlab="BF",ylab="C2 p-value (-log10 scale)")
+abline(h=3,lty=2) # 0.001 p--value theshold
+abline(v=20,lty=2) # BF threshold for decisive evidence (according to Jeffreys' rule)
+```
 
 
 
