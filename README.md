@@ -1126,7 +1126,7 @@ for filename in os.listdir("/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_i
 ```
 
 The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6.
-Estimate time running for BayPass on each sub-file is 45 minutes. We can lunch all jobs simultaneously using:
+Estimate time running for BayPass on each sub-file is approximately 45 minutes. We can launch all jobs simultaneously using:
 ```
 cd /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/
 for file in ls *sh
