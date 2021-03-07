@@ -1240,7 +1240,7 @@ abline(v=20,lty=2,col="red") #BF threshold for decisive evidence (according to J
 
 <img src="plot_poolfstatdata_110221_hist.png" style="background:none; border:none; box-shadow:none;">
 
-How many selected points ?
+How many selected points?
 ```
 all <- merge(x = contrast[ , c("SCAFFOLD","POSITION","LOG")], y = betai[ , c("SCAFFOLD","POSITION","BF.dB")], by=c("SCAFFOLD","POSITION"),)
 write.table(all, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_110221_results.txt")
@@ -1251,7 +1251,7 @@ write.table(outliers, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass
 ```
 
 We now use the sub-poolfstat data, with more stringent parameters.
-Nb : we tried to subset the result table, but LOG values were different that when running BayPass with a subset input SNPs file
+Note: we tried to subset the result table, but LOG values were different from when running BayPass with a subset input SNPs file.
 
 ```
 mkdir split_input_sub
