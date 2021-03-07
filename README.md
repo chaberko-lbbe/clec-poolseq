@@ -1135,20 +1135,154 @@ do
 done
 ```
 
+Before concatenating the outputs, the first line (column names) of each file must be remove:
+```
+sed -i '1d' *constrast.out
+sed -i '1d' *_summary_betai_reg.out
+```
+
+Concatenate the outputs:
+```
+ls -v poolfstatdata_110221_*_summary_contrast.out | xargs cat > poolfstatdata_110221_all_summary_contrast.out 
+ls -v poolfstatdata_110221_*_summary_betai_reg.out | xargs cat > poolfstatdata_110221_all_summary_betai_reg.out 
+# To make sure that the files are in "numerical" order
+```
+
+Check that the two files we want to paste have the same number of lines:
+```
+wc -l /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.snpdet # 10 139 943
+wc -l poolfstatdata_110221_all_summary_contrast.out # 10 139 943
+wc -l poolfstatdata_110221_all_summary_betai_reg.out # 10 139 943
+```
+
+Add column names:
+```
+sed  -i '1i SCAFFOLD POSITION REF ALT' /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.snpdet
+sed  -i '1i CONTRAST MRK M_C2 SD_C2 C2_std log10(1/pval)' /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_output/poolfstatdata_110221_all_summary_contrast.out
+sed  -i '1i COVARIABLE MRK M_Pearson SD_Pearson BF(dB) Beta_is SD_Beta_is eBPis' /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_output/poolfstatdata_110221_all_summary_betai_reg.out
+```
+
+Paste tables:
+```
+paste /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.snpdet poolfstatdata_110221_all_summary_contrast.out > poolfstatdata_110221_all_summary_contrast_snpdet.out
+paste /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.snpdet poolfstatdata_110221_all_summary_betai_reg.out > poolfstatdata_110221_all_summary_betai_reg_snpdet.out
+```
+
+Open R on the cluster:
+```
+/beegfs/data/soft/R-3.5.2/bin/R
+contrast=read.table("poolfstatdata_110221_all_summary_contrast_snpdet.out")
+contrast <- contrast[-1, ]
+contrast <- contrast[,-c(5,6)] # Remove column CONTRAST (only 1) and MRK (1:10000 for each subset file)
+colnames(contrast) <- c("SCAFFOLD","POSITION","REF","ALT","M_C2","SD_C2",
+"C2_std","LOG") # LOG=log10(1/pval)
+dim(contrast) # [1] 10139943        8
+contrast <- contrast[!(contrast$SCAFFOLD=="NC_030043.1"),] # Remove mitochondrial
+dim(contrast) #[1] 10139835        8
+contrast$LOG <- as.numeric(as.character(contrast$LOG))
+
+betai=read.table("poolfstatdata_110221_all_summary_betai_reg_snpdet.out")
+betai <- betai[-1, ]
+betai <- betai[,-c(5,6)] # Remove column CONTRAST (only 1) and MRK (1:10000 for each subset file)
+colnames(betai) <- c("SCAFFOLD","POSITION","REF","ALT","M_Pearson",
+"SD_Pearson","BF.dB","Beta_is","SD_Beta_is","eBPis") # BF.dB = BF(dB)
+dim(betai) # [1] 10139943        8
+betai <- betai[!(test3$SCAFFOLD=="NC_030043.1"),] # Remove mitochondrial
+dim(betai) #[1] 10139835       10
+betai$BF.dB <- as.numeric(as.character(betai$BF.dB))
+
+summary(contrast)
+         M_C2                 SD_C2                 C2_std        
+ 0.68335906:       5   0.87546325:       5   0.00000000:     531  
+ 0.68453837:       5   0.93783286:       5   0.00000001:     400  
+ 0.70137523:       5   0.94074307:       5   0.00000002:     279  
+ 0.70264553:       5   0.94538022:       5   0.00000003:     220  
+ 0.71227663:       5   1.00928620:       5   0.00000004:     189  
+ 0.71717973:       5   1.01447543:       5   0.00000005:     161  
+ (Other)   :10139913   (Other)   :10139913   (Other)   :10138163  
+      LOG        
+ Min.   :0.0000  
+ 1st Qu.:0.1398  
+ Median :0.3639  
+ Mean   :0.4971  
+ 3rd Qu.:0.7124  
+ Max.   :8.4857  
+
+summary(betai) 
+       M_Pearson             SD_Pearson           BF.dB        
+ -0.00120966:       5   0.54029289:       9   Min.   :-16.755  
+ -0.00761172:       5   0.51934770:       8   1st Qu.: -7.034  
+ -0.01160689:       5   0.52120184:       8   Median : -5.397  
+ -0.01261898:       5   0.52303979:       8   Mean   : -5.139  
+ -0.02761936:       5   0.52951295:       8   3rd Qu.: -3.858  
+ -0.04455849:       5   0.53196095:       8   Max.   : 59.787  
+ (Other)    :10139805   (Other)   :10139786                    
+        Beta_is              SD_Beta_is              eBPis         
+ -0.00064555:      18   0.01555728:      17   0.00321555:       7  
+ 0.00277646 :      18   0.01961458:      17   0.03123584:       7  
+ 0.00074518 :      17   0.01459807:      16   0.04042228:       7  
+ -0.00475267:      16   0.01537673:      16   0.07455867:       7  
+ 0.00052373 :      16   0.01680086:      16   0.08742999:       7  
+ 0.00082491 :      16   0.01717066:      16   0.00012522:       6  
+ (Other)    :10139734   (Other)   :10139737   (Other)   :10139794  
+```
+
 The resulting C2 contrasts (and BF) might then be plotted (and compared) as follows:
 ```
-poolfstatdata_110221.ecotype.bf=read.table("poolfstatdata_110221contrast_summary_betai_reg.out",h=T)$BF.dB.
-poolfstatdata_110221.ecotype.C2=read.table("poolfstatdata_110221contrast_summary_contrast.out",h=T)
+#check the behavior of the p-values associated to the C2
+hist(10**(-1*test$LOG),freq=F,breaks=100)
+abline(h=1, col="red")
 
-# Check the behavior of the p-values associated to the C2
-hist(10**(-1*l poolfstatdata_110221.ecotype.C2$log10.1.pval.)
-,freq=F,breaks=50)
-abline(h=1)
-plot(poolfstatdata_110221.ecotype.bf, poolfstatdata_110221.ecotype.C2$log10.1.pval.,
-xlab="BF",ylab="C2 p-value (-log10 scale)")
-abline(h=3,lty=2) # 0.001 p--value theshold
-abline(v=20,lty=2) # BF threshold for decisive evidence (according to Jeffreys' rule)
+plot(betai$BF.dB, test$LOG, xlab="BF",ylab="C2 p-value (-log10 scale)", pch=20)
+abline(h=3,lty=2,col="blue") #0.001 p--value theshold
+abline(v=20,lty=2,col="red") #BF threshold for decisive evidence (according to Jeffreys' rule)
 ```
+
+How many selected points ?
+```
+all <- merge(x = contrast[ , c("SCAFFOLD","POSITION","LOG")], y = betai[ , c("SCAFFOLD","POSITION","BF.dB")], by=c("SCAFFOLD","POSITION"),)
+write.table(all, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_110221_results.txt")
+
+outliers <- all[(all$BF.dB>20 & all$LOG>3),]
+dim(outliers) # [1] 261   4
+write.table(outliers, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_110221_outliers.txt")
+```
+
+We now use the sub-poolfstat data, with more stringent parameters.
+Nb : we tried to subset the result table, but LOG values were different that when running BayPass with a subset input SNPs file
+
+```
+mkdir split_input_sub
+split -dl 10000 poolfstatdata_sub_110221.geno --additional-suffix=.geno /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input_sub/poolfstatdata_sub_110221_
+```
+
+As before, we have created jobs for each input files, and launching them all simultaneously. The first line (column name) of each ouput file with 10000 lines must be removed before concatenating the outputs. Output files are then pasted with snps_det fail, containing all informations about SNP positions and scaffold name. Files are then processed with R as above (on data not undersampled).
+
+The resulting C2 contrasts (and BF) might then be plotted (and compared) as follows:
+```
+#check the behavior of the p-values associated to the C2
+hist(10**(-1*contrast$LOG),freq=F,breaks=100)
+abline(h=1, col="red")
+
+plot(betai$BF.dB, contrast$LOG, xlab="BF",ylab="C2 p-value (-log10 scale)", pch=20)
+abline(h=3,lty=2,col="blue") #0.001 p--value theshold
+abline(v=20,lty=2,col="red") #BF threshold for decisive evidence (according to Jeffreys' rule)
+```
+
+How many selected points?
+```
+all <- merge(x = contrast[ , c("SCAFFOLD","POSITION","LOG")], y = betai[ , c("SCAFFOLD","POSITION","BF.dB")], by=c("SCAFFOLD","POSITION"),)
+write.table(all, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_sub_110221_results.txt")
+
+outliers <- all[(all$BF.dB>20 & all$LOG>3),]
+dim(outliers) # 168
+write.table(outliers, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_sub_110221_outliers.txt")
+```
+
+
+
+Que faire de ces fichiers « outliers » : mapper ces outliers sur les LG/sans les LG sur le plot des FST élevés ?
+
 
 
 
