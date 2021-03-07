@@ -1270,7 +1270,7 @@ plot(betai$BF.dB, contrast$LOG, xlab="BF",ylab="C2 p-value (-log10 scale)", pch=
 abline(h=3,lty=2,col="blue") #0.001 p--value theshold
 abline(v=20,lty=2,col="red") #BF threshold for decisive evidence (according to Jeffreys' rule)
 ```
-<img src="plot_poolfstatdata_sub_110221_hist.png" style="background:none; border:none; box-shadow:none;">
+<img src="plot_poolfstatdata_sub_110221.png" style="background:none; border:none; box-shadow:none;">
 
 How many selected points?
 ```
