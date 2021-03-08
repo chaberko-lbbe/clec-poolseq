@@ -1125,7 +1125,7 @@ for filename in os.listdir("/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_i
           w.write("date")
 ```
 
-The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6.
+The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6. We have followed BayPass pipeline for pool-seq data.
 Estimate time running for BayPass on each sub-file is approximately 45 minutes. We can launch all jobs simultaneously using:
 ```
 cd /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/
@@ -1227,6 +1227,7 @@ summary(betai)
  (Other)    :10139734   (Other)   :10139737   (Other)   :10139794  
 ```
 
+We are looking for markers with C2 value significantly different from 0 (low p-value), which means that those markers are associated with the population ecotype (here, field vs lab strains). Since Bayes Factor (BF) measures the likelihood of a model under selection, we also track high BF.
 The resulting C2 contrasts (and BF) might then be plotted (and compared) as follows:
 ```
 #check the behavior of the p-values associated to the C2
@@ -1240,7 +1241,9 @@ abline(v=20,lty=2,col="red") #BF threshold for decisive evidence (according to J
 
 <img src="plot_poolfstatdata_110221_hist.png" style="background:none; border:none; box-shadow:none;">
 
-How many selected points?
+The histogram representing the associated p-values is not regular.
+
+How many selected points are in the top right corner of the plot?
 ```
 all <- merge(x = contrast[ , c("SCAFFOLD","POSITION","LOG")], y = betai[ , c("SCAFFOLD","POSITION","BF.dB")], by=c("SCAFFOLD","POSITION"),)
 write.table(all, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_110221_results.txt")
@@ -1249,6 +1252,7 @@ outliers <- all[(all$BF.dB>20 & all$LOG>3),]
 dim(outliers) # [1] 261   4
 write.table(outliers, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_110221_outliers.txt")
 ```
+Here we have selected 261 SNPs that might be subjected to selection according to our BayPass analysis between field and laboratory populations.
 
 We now use the sub-poolfstat data, with more stringent parameters.
 Note: we tried to subset the result table, but LOG values were different from when running BayPass with a subset input SNPs file.
@@ -1272,7 +1276,9 @@ abline(v=20,lty=2,col="red") #BF threshold for decisive evidence (according to J
 ```
 <img src="plot_poolfstatdata_sub_110221.png" style="background:none; border:none; box-shadow:none;">
 
-How many selected points?
+We can observe an histogramm with anti-conservative p-values, which seems much more reliable.
+
+How many selected points are in the top right corner of the plot?
 ```
 all <- merge(x = contrast[ , c("SCAFFOLD","POSITION","LOG")], y = betai[ , c("SCAFFOLD","POSITION","BF.dB")], by=c("SCAFFOLD","POSITION"),)
 write.table(all, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_sub_110221_results.txt")
@@ -1281,7 +1287,7 @@ outliers <- all[(all$BF.dB>20 & all$LOG>3),]
 dim(outliers) # 168
 write.table(outliers, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_sub_110221_outliers.txt")
 ```
-
+Here we have selected 168 SNPs that might be subjected to selection according to our BayPass analysis between field and laboratory populations.
 
 
 Que faire de ces fichiers « outliers » : mapper ces outliers sur les LG/sans les LG sur le plot des FST élevés ?
