@@ -1389,6 +1389,6 @@ test2 <- subset(sub_outliers_wo_LG , sub_outliers_wo_LG$Colour == "red" & sub_ou
 # 16 combinent les 2 conditions !
 ```
 
-<img src="plot_FST_baypass_in_blue.png" width="546" height="792" style="background:none; border:none; box-shadow:none;">
+<img src="plot_FST_baypass_in_blue.png" width="792" height="546" style="background:none; border:none; box-shadow:none;">
 
 
