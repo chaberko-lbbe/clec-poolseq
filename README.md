@@ -1254,7 +1254,7 @@ write.table(outliers, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass
 ```
 Here we have selected 261 SNPs that might be subjected to selection according to our BayPass analysis between field and laboratory populations.
 
-We now use the sub-poolfstat data, with more stringent parameters.
+We now use the sub-poolfstat data, with more stringent parameters: min.cov.per.pool = 10 (previously = -1), max.cov.per.pool = 200 (previously = 1e+06), min.maf = 0.05 (previously = 0.01).
 Note: we tried to subset the result table, but LOG values were different from when running BayPass with a subset input SNPs file.
 
 ```
