@@ -372,7 +372,8 @@ cat wolbachia_cimex_genome.fna g-proteobacteria_genome.fna clostridium_genome.fn
 
 Blastn only shows homologies with regions in other scaffolds of *Cimex lectularius*. A single scaffold "NW_019392726.1" appears to have bacterial contamination, but not in the area with increased coverage (which is around position ~966 000). Indeed, an homology of 85% homology between positions 659396 and 659909 was detected with "NZ_AP013028.1", which belongs to *Wolbachia* endosymbiont genome (https://www.ncbi.nlm.nih.gov/nuccore/NZ_AP013028.1).
 
-We choose to exclude in our analysis coverage over 200 bp in order to avoid bias due to very high coverage.
+We choose to exclude in our analysis coverage over 200 bp, which corresponds to >99% quantile for all populations, in order to avoid bias due to very high coverage.
+
 
 ## Genetic differenciation of populations
 
