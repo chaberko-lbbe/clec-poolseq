@@ -315,7 +315,9 @@ Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
 
 <img src="order_length.png" width="600" height="450" style="background:none; border:none; box-shadow:none;">
 
-As we can see, scaffold with extremely high mean coverage aren't the longer ones. Let's analyse it deeper:
+Some scaffold have very high coverage, until 10 547 100 (GL), with a mean coverage for high scaffold around 8000
+
+As we can see, scaffold with extremely high mean coverage aren't the longer ones. Can those high coverage be due to transposable elements ? Or to a contamination (viral/bacterial) ? Let's analyse them in more detail:
 
 ```{r}
 map_SF=read.table("map_scaff_SF.txt")
@@ -325,7 +327,7 @@ map_SF_highcov <- map_SF[map_SF$V3 > quantile(map_SF$V3, 0.99), ]
 
 write.table(map_SF_highcov, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/map_scaff_SF_highcov.txt")
 
-# Extraction of scaffold with high coverage (threshold 0.99) : 
+# Extraction of scaffold with high coverage (threshold 0.990) : 
 
 map_SF=read.table("SF_cov_map.txt")
 map_SF_highcov <- map_SF[ which(map_SF$V1=='NW_019392706.1' | map_SF$V1=='NW_019392715.1' | map_SF$V1=='NW_019392726.1' | map_SF$V1=='NW_019392782.1' | map_SF$V1=='NW_019392787.1' | map_SF$V1=='NW_019392930.1' | map_SF$V1=='NW_019393092.1' | map_SF$V1=='NW_019393097.1' | map_SF$V1=='NW_019393543.1' | map_SF$V1=='NW_019393765.1' | map_SF$V1=='NW_019393885.1' | map_SF$V1=='NW_019393980.1' | map_SF$V1=='NW_019394066.1' | map_SF$V1=='NW_019394087.1' | map_SF$V1=='NW_019394151.1' | map_SF$V1=='NC_030043.1'),]
@@ -335,17 +337,32 @@ write.table(map_SF_highcov, file="/beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SE
 map_SF_highcov <- map_SF[ which(map_SF$V1=='NW_019393765.1' | map_SF$V1=='NW_019393885.1' | map_SF$V1=='NW_019392930.1' | map_SF$V1=='NW_019392787.1' |  map_SF$V1=='NW_019392782.1' | map_SF$V1=='NW_019392715.1' | map_SF$V1=='NW_019392726.1' |    map_SF$V1=='NC_030043.1'),]
 ```
 
+map_LL_highcov
+   scaffold     mean_cov   
+NW_019392715.1  235.7305 
+NW_019392726.1 1073.6487 
+NW_019392782.1  601.3256 
+NW_019392787.1  573.9980 
+NW_019392930.1  759.7550 
+NW_019393765.1 1603.5458 
+NW_019393885.1 3188.0000 
+NC_030043.1    3986.6250 
+
+
+First of all, we excluded from our analysis the scaffold "NC_030043.1", which corresponds to the mitochondrial genome. Indeed, for one copy of the nuclear genome, there are several copies of the nuclear genome. Furthermore, the mitochondrial genome does not evolve like the nuclear genome (not the same mutation rate, no recombination, maternal transmission). 
+
 Extract scaffold sequences identified at the 0.995 threshold from reference genome and Blast with our own database, including several bacterian genome (Wolbachia_cimex_genome, g-proteobacteria_genome, clostridium_genome):
 
 ```
 /beegfs/data/soft/samtools-1.9/bin/samtools faidx /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna NW_019392715.1 > scaff_NW_019392715.fa
+# do it for each scaffold
 
 cat mitochondion_cimex.fasta wolbachia_cimex_genome.fna g-proteobacteria_genome.fna clostridium_genome.fna /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/Cimex_lectularius.fna > data_cimex.fasta
 
 /beegfs/data/chaberkorn/Tools/myconda/bin/makeblastdb -in data_cimex.fasta -dbtype nucl -out data_cimex 
 # Output : 3 data_cimex.* file
 
-# Blast also only with only bacterian genomes:
+# Blast also with only bacterian genomes:
 
 cat wolbachia_cimex_genome.fna g-proteobacteria_genome.fna clostridium_genome.fna > data_bacteria.fasta
 
@@ -357,7 +374,7 @@ cat wolbachia_cimex_genome.fna g-proteobacteria_genome.fna clostridium_genome.fn
 
 
 
-
+We choose to exclude in our analysis coverage over 200 bp in order to avoid bias due to very high coverage.
 
 
 
