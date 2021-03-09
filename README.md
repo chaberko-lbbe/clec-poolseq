@@ -1302,8 +1302,93 @@ write.table(outliers, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass
 Here we have selected 168 SNPs that might be subjected to selection according to our BayPass analysis between field and laboratory populations.
 
 
+
+
+
 Que faire de ces fichiers « outliers » : mapper ces outliers sur les LG/sans les LG sur le plot des FST élevés ?
 
+```
+outliers <- read.table(file="~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/BayPass/baypass_110221_outliers.txt", 
+                           sep=" ", header=T)
+colnames(outliers) <- c("scaffold","position","LOG","BF.dB")
+outliers[,1] <- substring(outliers[,1],1,12)
 
+sub_outliers <- read.table(file="~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/BayPass/baypass_sub_110221_outliers.txt", 
+                           sep=" ", header=T)
+colnames(sub_outliers) <- c("scaffold","position","LOG","BF.dB")
+sub_outliers[,1] <- substring(sub_outliers[,1],1,12)
+
+
+load("/Users/chloe/Documents/Cluster/Envir_FST_Poolfstat.RData")
+rm(pooldata)
+rm(PairwiseFST)
+
+dim(PairwiseFST_all$PairwiseSnpFST)
+dim(pooldata_sub@snp.info)
+# Verify same dim()
+
+data_FST <- cbind(pooldata_sub@snp.info,PairwiseFST_all$PairwiseSnpFST)
+data_FST <- as.data.frame(data_FST)
+
+rm(pooldata)
+rm(PairwiseFST)
+rm(PairwiseFST_all)
+rm(pooldata_sub)
+
+summary(data_FST) # all characters
+
+colnames(data_FST) <-c("scaffold","position","ref","alt","GL_vs_LF","GL_vs_SF",
+                       "GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL")
+
+data_FST[,1] <- substring(data_FST[,1],1,12) # 5 722 762
+data_FST <- data_FST[!(data_FST$scaffold=="NC_030043.1"),] # 5 722 749
+
+data_FST$position <- as.numeric(data_FST$position)
+data_FST$GL_vs_LF <- as.numeric(data_FST$GL_vs_LF)
+data_FST$GL_vs_SF <- as.numeric(data_FST$GL_vs_SF)
+data_FST$GL_vs_LL <- as.numeric(data_FST$GL_vs_LL)
+data_FST$LF_vs_SF <- as.numeric(data_FST$LF_vs_SF)
+data_FST$LF_vs_LL <- as.numeric(data_FST$LF_vs_LL)
+data_FST$SF_vs_LL <- as.numeric(data_FST$SF_vs_LL)
+
+data_FST <- data_FST[,-c(3,4)] # enlever col ref et alt
+
+data_FST$Colour="black"
+data_FST$Colour[(data_FST$GL_vs_LF > quantile(data_FST$GL_vs_LF, 0.99, na.rm=T) 
+                   & data_FST$GL_vs_SF > quantile(data_FST$GL_vs_SF, 0.99, na.rm=T)
+                   & data_FST$LF_vs_LL > quantile(data_FST$LF_vs_LL, 0.99, na.rm=T)
+                   & data_FST$SF_vs_LL > quantile(data_FST$SF_vs_LL, 0.99, na.rm=T))]="red"
+
+test <- data_FST[data_FST$Colour == "red",] # 231 FST R≠S q99
+
+library(dplyr)
+
+data_FST$X <- 1:length(data_FST$scaffold)
+data_FST <- data_FST %>% arrange(position)
+data_FST <- data_FST %>% arrange(scaffold)
+data_FST <- data_FST %>% arrange(Colour)
+
+sub_outliers$out <- "yes"
+
+# On travaille uniquement sur sub_outliers_wo_LG comme les data_FST sont tirées du subset des pooldata de Poolfstat !
+
+sub_outliers_wo_LG <- merge(x = data_FST[ , c("scaffold","GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL","position","Colour")], 
+                         y = sub_outliers[ , c("scaffold","position","out")], by=c("scaffold","position"),all=T)
+
+sub_outliers_wo_LG$X <- 1:length(sub_outliers_wo_LG$scaffold)
+
+sub_outliers_wo_LG <- sub_outliers_wo_LG %>% arrange(position)
+sub_outliers_wo_LG <- sub_outliers_wo_LG %>% arrange(scaffold)
+sub_outliers_wo_LG <- sub_outliers_wo_LG %>% arrange(Colour)
+
+test1 <- sub_outliers_wo_LG[sub_outliers_wo_LG$Colour == "red",] # 231 FST R≠S q99
+View(test1)
+View(sub_outliers_wo_LG)
+
+test2 <- subset(sub_outliers_wo_LG , sub_outliers_wo_LG$Colour == "red" & sub_outliers_wo_LG$out == "yes")
+# 16 combinent les 2 conditions !
+```
+
+<img src="plot_FST_baypass_in_blue.png" width="546" height="792" style="background:none; border:none; box-shadow:none;">
 
 
