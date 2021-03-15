@@ -422,6 +422,10 @@ pooldata_sub <- pooldata.subset(pooldata, pool.index = c(1,2,3,4), min.cov.per.p
 # pool.index = indexes of the pools (at least two), that should be selected to create the new pooldata objec
 # min.maf correspond to Minimal allowed Minor Allele Frequency -> min-count of 5 w/ PoPoolation2
 # With same parameters, 5 722 762 SNPs for 4 Pools, compared to 5 837 216 w/ PoPoolation2)
+
+pooldata_sub2 <- pooldata.subset(pooldata, pool.index = c(1,2,3,4), min.cov.per.pool = 10, max.cov.per.pool = 50, min.maf = 0.05)
+# 5 574 190 SNPs for 4 Pools
+# max.cov of 50 : corresponds to coverage >q95
 ``` 
 
 Perform PCA:
@@ -1074,6 +1078,12 @@ pooldata2genobaypass(pooldata,
 pooldata2genobaypass(pooldata_sub,
                      writing.dir = getwd(), # directory where to create the files
                      prefix = "poolfstatdata_sub_110221", # prefix used for output file names
+                     subsamplesize = -1) # all SNPs are considered in the output
+                     # subsamplingmethod = "thinning")
+
+pooldata2genobaypass(pooldata_sub2,
+                     writing.dir = getwd(), # directory where to create the files
+                     prefix = "poolfstatdata_sub2_120321", # prefix used for output file names
                      subsamplesize = -1) # all SNPs are considered in the output
                      # subsamplingmethod = "thinning")
 ```
