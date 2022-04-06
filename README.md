@@ -4,7 +4,7 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 
 ### Table of Contents
 
-- **[Mapping and processing Pool-seq genomes](#Mapping-and-processing-Pool-seq-genomes)**
+- **[Pool-seq data processing](#Pool-seq-data-processing)**
 	- [Installing tools](#Installing-tools)
 	- [Getting the data](#Getting-the-data)
 	- [Trimming](#Trimming)
@@ -12,10 +12,15 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Mapping](#Mapping)
 	- [Analysing coverage](#Analysing-coverage)
 
-- **[Genetic differenciation of populations](#Genetic-differenciation-of-populations)**
+- **[Detecting Single Nucleotide Polymorphism](#Detecting-Single-Nucleotide-Polymorphism)**
 	- [Installing tools](#Installing-tools)
-	- [Detecting SNPs](#Detecting-SNPs)
-	- [Compute FST](#Compute-FST)
+	- [Overall SNPs analyzes](#Overall-SNPs-analyzes)
+
+ - **[Selecting candidate SNPs](#Selecting-candidate-SNPs)**
+	- [Installing tools](#Installing-tools)
+	- [Overall SNPs analyzes](#Overall-SNPs-analyzes)
+
+
 
 - **[Genetic polymorphism within populations](#Genetic-polymorphism-within-populations)**
 	- [Installing tools](#Installing-tools)
@@ -26,80 +31,69 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Identifying genetic markers under selection](#Identifying-genetic-markers-under-selection)
 	- [Mapping areas under selection](#Mapping-areas-under-selection)
 
-## Mapping and processing Pool-seq genomes
+## Pool-seq data processing
 
-The goal is first to map *Cimex lectularius* PoolSeq samples on reference genome : London Lab, London Field, German Lab, Sweden Field (pools of 30 individuals).
-We can benefit from the recent reference genome and annotation, avalaible here : https://www.ncbi.nlm.nih.gov/assembly/GCF_000648675.2
+The goal is first to map *Cimex lectularius* PoolSeq samples (London Lab, London Field, German Lab and Sweden Field - pools of 30 individuals) on reference genome.
+We used the recent reference genome and annotation, avalaible here: https://www.ncbi.nlm.nih.gov/assembly/GCF_000648675.2
 
 We will have to download a few softs.
 
 ### Install tools
 
-BWA :
+Here are the tools and versions used: 
+
+- BWA 
+- Trimmomatic
+- FastQC
+- Bedtools
+- Samtools
+- FastUniq
+- PoPoolation 
+- PoPoolation 2
+- R/packages poolfstat; pcadapt;
+
+They will be store in /your-path/Tools.
+
+Example for BWA:
 ``` 
 git clone https://github.com/lh3/bwa.git
 cd bwa
 make
-/beegfs/data/chaberkorn/Tools/bwa/bwa index # Check that the soft is working 
+/your-path/Tools/bwa/bwa index # Check that the soft is working 
 ```
 
-Trimmomatic :
-We will have to download the associated adapters. To do so : in fastq file, look at overrepresented sequences -> "TruSeq Adapter". These primers come from the TruSeq-3 library.
-``` 
-chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/trimmomatic-0.39
-chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/TruSeq3-PE.fa
-``` 
-
-Bedtools :
-``` 
-chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/bedtools2
-``` 
-
-FastUniq :
-``` 
-chaberkorn@pbil-deb:/beegfs/data/chaberkorn/Tools/FastUniq
-``` 
+For Trimmomatic, we will also have to download the associated adapters. To do so : in fastq file, look at overrepresented sequences -> "TruSeq Adapter". These primers come from the TruSeq-3 library.
 
 ### Getting the data
 
+Raw sequences (fastq.gz files):
 ```
-#Create directory with raw sequences
-mkdir /beegfs/data/chaberkorn/PoolSeq_Clec/Raw_Clec
-cp -r /beegfs/data/varaldi/BEDBUGS/data_preliminary/*R*.fastq.gz /beegfs/data/chaberkorn/PoolSeq_Clec/Raw_Clec
-tar xvf fastqc.tar.gz
+mkdir /your-path/PoolSeq_Clec/Raw_Clec
+```
 
-#Create directory with reference genome 
-mkdir /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec
-
-#Open a terminal to move reference genome downloaded on computer to Beegfs
-scp -r /Users/chloe/Documents/Cluster chaberkorn@pbil-deb:/beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec
+Reference genome:
+```
+mkdir /your-path/PoolSeq_Clec/Ref_Clec
 ```
 
 ### Trimming
 
-Keep default parameters :
+Keep default parameters, except for:
+SLIDINGWINDOW:4:15 -> 20 was too high, use 15 instead
+
 ILLUMINACLIP:TruSeq3-PE.fa:2:30:10:2:keepBothReads 
-  - TruSeq3-PE.fa = according to fastq file infos
+  - TruSeq3-PE.fa = adaptaters to remove
   - 2 = seed mismatches
   - 30 = palindrome clip threshold
   - 10 = simple clip threshold
   - 2 = min Adapter Length
-SLIDINGWINDOW:4:20 -> too high, use 15 instead
 
 ```
-cd /beegfs/data/chaberkorn/PoolSeq_Clec/Trimmed
-nano trimm_LL.sh
+mkdir /your-path/PoolSeq_Clec/Trimmed
+cd /your-path/PoolSeq_Clec/Trimmed
 
-#!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Trimmed/Trimming_LL.error
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Trimmed/Trimming_LL.out
-#SBATCH -J Genome_trimming_Cimex_lectularius
-
-DIR=/beegfs/data/chaberkorn/PoolSeq_Clec
-DIRSOFT=/beegfs/data/chaberkorn/Tools
+DIR=/your-path/PoolSeq_Clec
+DIRSOFT=/your-path/Tools
 DIRFASTQ="$DIR"/Raw_Clec
 
 /usr/local/jre1.8.0_202/bin/java -jar "DIRSOFT"/trimmomatic-0.39.jar PE -phred33 -trimlog LL_trim.log \
@@ -108,112 +102,72 @@ LL_R1_paired.fq.gz LL_R1_unpaired.fq.gz LL_R2_paired.fq.gz LL_R2_unpaired.fq.gz 
 ILLUMINACLIP:"DIRSOFT"/TruSeq3-PE.fa:2:30:10:2:keepBothReads LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:50 
 
 gunzip LF_*_paired.fq.gz
-
-# Check filtering quality using fastq :
-/beegfs/data/chaberkorn/Tools/FastQC/fastqc --java /usr/local/jre1.8.0_202/bin/java LF_R1_paired.fq
-/beegfs/data/chaberkorn/Tools/FastQC/fastqc --java /usr/local/jre1.8.0_202/bin/java LF_R2_paired.fq
 ```
 
-Count the number of sequences (starting with "@") with : 
-
+Check filtering quality using fastq:
 ```
-grep -c @ LF_R2_paired.fq
+/your-path/Tools/FastQC/fastqc --java /usr/local/jre1.8.0_202/bin/java LF_R1_paired.fq
+/your-path/Tools/FastQC/fastqc --java /usr/local/jre1.8.0_202/bin/java LF_R2_paired.fq
 ```
 
 ### Removing duplicates
 
-Using FastUniq
+Create a text file with both input - Example for input_LL.txt:
+```
+LL_R1_paired.fq
+LL_R2_paired.fq
+```
 
+Using FastUniq:
+```
+cd /your-path/PoolSeq_Clec/Trimmed
+gunzip *_paired.fq.gz
+
+/your-path/Tools/FastUniq/source/fastuniq -i input_LL.txt -t q -o LL_dup_1.fastq -p LL_dup_2.fastq -c 1
+```
+
+Check how many duplicate sequences have been deleted:
+```
+/your-path/Tools/FastQC/fastqc --java /usr/local/jre1.8.0_202/bin/java LL_dup_1.fastq
+/your-path/Tools/FastQC/fastqc --java /usr/local/jre1.8.0_202/bin/java LL_dup_2.fastq
+```
+
+Parameters of FastUniq:
 -t q : output sequence format - FASTQ format into TWO output files
--o : premier output
--p : deuxieme output
+-o : first output / -p : second output
 -c 1 : types of sequence descriptions for output - new serial numbers assigned by FastUniq (0 : the raw descriptions)
-
-```
-gunzip *_paired.fq.gz # R1 and R2 for each pop
-# Create a text file with both input : R1 and R2 > input_LL.txt
-
-nano LL_dup.txt
-
-#!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Trimmed/LL_dup.error
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Trimmed/LL_dup.out
-#SBATCH -J Genome_duplicates_Cimex_lectularius
-
-/beegfs/data/chaberkorn/Tools/FastUniq/source/fastuniq -i input_LL.txt -t q -o LL_dup_1.fastq -p LL_dup_2.fastq -c 1
-
-# Check how many duplicate sequences have been deleted:
-/beegfs/data/chaberkorn/Tools/FastQC/fastqc --java /usr/local/jre1.8.0_202/bin/java LL_dup_1.fastq
-/beegfs/data/chaberkorn/Tools/FastQC/fastqc --java /usr/local/jre1.8.0_202/bin/java LL_dup_2.fastq
-```
 
 ### Mapping
 
 ```
-nano mapping_LL.sh
+mkdir /your-path/PoolSeq_Clec/Mapped/
+cd /your-path/PoolSeq_Clec/Mapped/
 
-#!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/mapping_LL.error
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/mapping_LL.out
-#SBATCH -J Genome_mapping_Cimex_lectularius
-
-/beegfs/data/chaberkorn/Tools/bwa/bwa mem -t 8 /beegfs/data/chaberkorn/PoolSeq_Clec/Ref_Clec/ncbi-genomes-2020-12-15/GCF_000648675.2_Clec_2.1_genomic.fna \
-/beegfs/data/chaberkorn/PoolSeq_Clec/Trimmed/LL_dup_1.fastq /beegfs/data/chaberkorn/PoolSeq_Clec/Trimmed/LL_dup_2.fastq > LL_mapped.sam
+/your-path/Tools/bwa/bwa mem -t 8 /your-path/PoolSeq_Clec/Ref_Clec/ncbi-genomes-2020-12-15/GCF_000648675.2_Clec_2.1_genomic.fna \
+/your-path/PoolSeq_Clec/Trimmed/LL_dup_1.fastq /your-path/PoolSeq_Clec/Trimmed/LL_dup_2.fastq > LL_mapped.sam
 ```
 
-Now we want to control mapping quality, while converting file from sam to bam
+Now we want to control mapping quality, while converting file from sam to bam, and keeping only reads whose mapping has a probability > 99% to be correct ("-q 20").
 
-Two options : keep all reads (and know the percentage mapping via flagstat)
-Or: separate mapped reads from unmapped reads (see /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP) :
-
-```
-/beegfs/data/soft/samtools-1.10/bin/samtools view -bS -F 4 GL_mapped.sam > GL_mapped.bam
-/beegfs/data/soft/samtools-1.10/bin/samtools view -bS -f 4 SF_mapped.sam > SF_unmapped.bam
-```
-
-To keep only the reads whose mapping has a probability > 99% to be correct : add on samtools view "-q 20".
+Two options: 
+- keep all reads (to know the percentage mapping using flagstat)
+- separate mapped reads ("-F 4") from unmapped ("-f 4") reads
 
 ```
-#!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/stats_SF.err
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/stats_SF.out
-#SBATCH -J Genome_stats_Cimex_lectularius
+/your-path/Tools/samtools-1.10/bin/samtools view -bS -F 4 -q 20 LL_mapped.sam > LL_mapped.bam
+/your-path/Tools/samtools-1.10/bin/samtools view -bS -f 4 -q 20 LL_mapped.sam > LL_unmapped.bam
 
-/beegfs/data/soft/samtools-1.10/bin/samtools view -bS -@ 2 GL_mapped.sam > GL_mapped.bam  
+/your-path/Tools/samtools-1.10/bin/samtools sort LL_mapped.bam -o LL_mapped_sorted.bam
 
-/beegfs/data/soft/samtools-1.10/bin/samtools sort GL_mapped.bam -o GL_mapped_sorted.bam
-
-rm GL_mapped.bam
-
-/beegfs/data/soft/samtools-1.9/bin/samtools flagstat GL_mapped_sorted.bam > flagstat_GL.txt
+/your-path/Tools/samtools-1.9/bin/samtools flagstat LL_mapped_sorted.bam > flagstat_LL.txt
 ```
 
 ### Analysing coverage 
 
-Calculer les couvertures par base (combien de reads mappent à une position du genome de reference = 1 NT)
-Pour uniquement les reads mappes (-F 4 ; mapped_sorted) 
+We can compute coverage per base (i.e. number of reads mapping at a position of the reference genome)
 
 ```
-nano cov_SF_mapped_sorted.sh
-
-#!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem 10G
-#SBATCH -t 24:00:00
-#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/cov_SF_mapped_sorted.err
-#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/Mapped/SEP_MAP_UNMAP/cov_SF_mapped_sorted.out
-#SBATCH -J Genome_cov_Cimex_lectularius
-
-/beegfs/data/chaberkorn/Tools/bedtools2/bin/bedtools genomecov -ibam SF_mapped_sorted.bam -d > SF_cov.txt
+/your-path/Tools/Tools/bedtools2/bin/bedtools genomecov -ibam SF_mapped_sorted.bam -d > SF_cov.txt
 ```
 
 Then, we analyse them on R:
