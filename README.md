@@ -4,8 +4,9 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 
 ### Table of Contents
 
+- **[Installing tools](#Installing-tools)**
+
 - **[Pool-seq data processing](#Pool-seq-data-processing)**
-	- [Installing tools /1](#Installing-tools-/1)
 	- [Getting the data](#Getting-the-data)
 	- [Trimming](#Trimming)
 	- [Removing duplicates](#Removing-duplicates)
@@ -13,14 +14,36 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Analysing coverage](#Analysing-coverage)
 
 - **[Detecting Single Nucleotide Polymorphism](#Detecting-Single-Nucleotide-Polymorphism)**
-	- [Installing tools /2](#Installing-tools-/2)
 	- [Overall SNPs analyzes](#Overall-SNPs-analyzes)
+	- [Performing PCA](#Performing-PCA)
+	- [Computing FST](#Computing-FST)
 
  - **[Selecting candidate SNPs](#Selecting-candidate-SNPs)**
-	- [Installing tools /3](#Installing-tools-/3)
 	- [Differentiated FST](#Differentiated-FST)
 	- [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes)
 	- [Alternative alleles](#Alternative-alleles)
+
+
+
+
+## Installing tools
+
+Here are the tools and versions used (on a cluster): 
+- FastQC 
+- Trimmomatic v0.39
+- FastUniq v1.1
+- BWA v0.74
+- Samtools v1.9
+- Bedtools v2.29.1
+- PoPoolation 2 v1201
+- BayPass v2.2
+- R v3.5.2
+
+They will be store in /your-path/Tools.
+We also used R on a computer with packages poolfstat v2.0.0, pcadapt v4.3.3, VariantAnnotation v1.34.0, and GenomicFeatures v1.40.1.
+
+
+
 
 ## Pool-seq data processing
 
@@ -28,28 +51,6 @@ The goal is first to map *Cimex lectularius* PoolSeq samples (London Lab, London
 We used the recent reference genome and annotation, avalaible here: https://www.ncbi.nlm.nih.gov/assembly/GCF_000648675.2
 
 We will have to download a few softs.
-
-### Installing tools /1
-
-Here are the tools and versions used: 
-- FastQC 
-- Trimmomatic v0.39
-- FastUniq v1.1
-- BWA v0.74
-- Samtools v1.9
-- Bedtools v2.29.1
-
-They will be store in /your-path/Tools.
-
-Example for BWA:
-``` 
-git clone https://github.com/lh3/bwa.git
-cd bwa
-make
-/your-path/Tools/bwa/bwa index # Check that the soft is working 
-```
-
-For Trimmomatic, we will also have to download the associated adapters. To do so : in fastq file, look at overrepresented sequences -> "TruSeq Adapter". These primers come from the TruSeq-3 library.
 
 ### Getting the data
 
@@ -65,7 +66,9 @@ mkdir /your-path/PoolSeq_Clec/Ref_Clec
 
 ### Trimming
 
-Keep default parameters, except for:
+To use Trimmomatic, we also had to download the associated adapters. To know which adapters should be downloaded, one can look at overrepresented sequences in fastq file: in our case, "TruSeq Adapter" > https://github.com/timflutre/trimmomatic/blob/master/adapters/TruSeq3-PE.fa
+
+We kept Trimmomatic default parameters, except for:
 SLIDINGWINDOW:4:15 -> 20 was too high, use 15 instead
 
 ILLUMINACLIP:TruSeq3-PE.fa:2:30:10:2:keepBothReads 
@@ -162,21 +165,12 @@ We choose to exclude of our analysis coverage over 50 bp, which corresponds to >
 
 
 
-
 ## Detecting Single Nucleotide Polymorphism
 
 The goal was to understand what differenciates the four *Cimex lectularius* PoolSeq samples: London Lab, London Field, German Lab, Sweden Field. 
 Our hypothesis was that we could be able to find candidate loci correlated with their insecticide resistance phenotypes - resistant for Field strains and susceptible for Lab strains. 
 
 For following analysis, we excluded the scaffold "NC_030043.1", which corresponds to the mitochondrial genome. Indeed, for one copy of the nuclear genome, there are several copies of the nuclear genome. Furthermore, the mitochondrial genome does not evolve like the nuclear genome (not the same mutation rate, no recombination, maternal transmission). 
-
-### Installing tools /2
-
-Here are the tools and versions used: 
-- PoPoolation 2 v1201
-- R/packages poolfstat v2.0.0; pcadapt v4.3.3;
-
-They will be store in /your-path/Tools.
 
 ### Overall SNPs analyzes
 
@@ -224,7 +218,7 @@ pooldata_sub <- pooldata.subset(pooldata, pool.index = c(1,2,3,4),
 # 5 574 190 SNPs for 4 pools
 ``` 
 
-Perform PCA on SNPs:
+### Performing PCA
 
 ```
 # Build pcadapt matrix
@@ -277,6 +271,9 @@ poplist.names <- c("German Lab", "London Field","Sweden Field","London Lab")
 plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 vs PC2
 plot(res, option = "manhattan")
 ```
+
+### Computing FST
+
 For each SNP, we can compute SNP-specific pairwise FST for each comparisons between strains (GL_vs_LF, GL_vs_SF, GL_vs_LL, LF_vs_SF, LF_vs_LL, SF_vs_LL), thanks to the option "output.snp.values = TRUE": 
 ``` 
 PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova",
@@ -290,14 +287,6 @@ PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova
 
 
 ## Selecting candidate SNPs
-
-
-### Installing tools /3
-
-BayPass :
-``` 
-/your-path/Tools/BayPass/baypass_2.2/sources/g_baypass
-```
 
 ### Differentiated FST
 
@@ -359,7 +348,6 @@ We were looking for markers with C2 value significantly different from 0 (low p-
 
 We then merged two of output files together: poolfstatdata_220321_summary_contrast_snpdet.out and poolfstatdata_220321_summary_betai_reg_snpdet.out
 > /your-path/PoolSeq_Clec/BayPass/baypass_220321_results.txt")
-
 
 ### Alternative alleles
 
