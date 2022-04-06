@@ -346,8 +346,7 @@ The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter
 
 We were looking for markers with C2 value significantly different from 0 (low p-value), which means that those markers are associated with the population ecotype (here, field vs lab strains). Since Bayes Factor (BF) measures the likelihood of a model under selection, we also tracked high BF.
 
-We then merged two of output files together: poolfstatdata_220321_summary_contrast_snpdet.out and poolfstatdata_220321_summary_betai_reg_snpdet.out
-> /your-path/PoolSeq_Clec/BayPass/baypass_220321_results.txt")
+We then merged two of output files together: poolfstatdata_220321_summary_contrast_snpdet.out and poolfstatdata_220321_summary_betai_reg_snpdet.out > /your-path/PoolSeq_Clec/BayPass/baypass_220321_results.txt")
 
 ### Alternative alleles
 
