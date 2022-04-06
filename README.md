@@ -18,8 +18,8 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 
  - **[Selecting candidate SNPs](#Selecting-candidate-SNPs)**
 	- [Installing tools](#Installing-tools)
-	- [Identifying differentiated SNPs (FST)](#Identifying-differentiated-alleles)
-	- [SNPs under selection with contrast between phenotypes (BayPass)](#SNPs-under-selection-with-contrast-between-phenotypes)
+	- [Identifying differentiated SNPs (FST)](#Identifying-differentiated-SNPs-(FST))
+	- [SNPs under selection with contrast between phenotypes (BayPass)](#SNPs-under-selection-with-contrast-between-phenotypes-(BayPass))
 	- [Selecting alternative alleles](#Selecting-alternative-alleles)
 
 ## Pool-seq data processing
