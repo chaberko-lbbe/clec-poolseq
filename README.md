@@ -5,7 +5,7 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 ### Table of Contents
 
 - **[Pool-seq data processing](#Pool-seq-data-processing)**
-	- [Installing tools #1](#Installing-tools-#1)
+	- [Installing tools /1](#Installing-tools-/1)
 	- [Getting the data](#Getting-the-data)
 	- [Trimming](#Trimming)
 	- [Removing duplicates](#Removing-duplicates)
@@ -13,11 +13,11 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Analysing coverage](#Analysing-coverage)
 
 - **[Detecting Single Nucleotide Polymorphism](#Detecting-Single-Nucleotide-Polymorphism)**
-	- [Installing tools #2](#Installing-tools-#2)
+	- [Installing tools /2](#Installing-tools-/2)
 	- [Overall SNPs analyzes](#Overall-SNPs-analyzes)
 
  - **[Selecting candidate SNPs](#Selecting-candidate-SNPs)**
-	- [Installing tools #3](#Installing-tools-#3)
+	- [Installing tools /3](#Installing-tools-/3)
 	- [Differentiated FST](#Differentiated-FST)
 	- [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes)
 	- [Alternative alleles](#Alternative-alleles)
@@ -29,7 +29,7 @@ We used the recent reference genome and annotation, avalaible here: https://www.
 
 We will have to download a few softs.
 
-### Installing tools #1
+### Installing tools /1
 
 Here are the tools and versions used: 
 - FastQC 
@@ -170,7 +170,7 @@ Our hypothesis was that we could be able to find candidate loci correlated with 
 
 For following analysis, we excluded the scaffold "NC_030043.1", which corresponds to the mitochondrial genome. Indeed, for one copy of the nuclear genome, there are several copies of the nuclear genome. Furthermore, the mitochondrial genome does not evolve like the nuclear genome (not the same mutation rate, no recombination, maternal transmission). 
 
-### Installing tools #2
+### Installing tools /2
 
 Here are the tools and versions used: 
 - PoPoolation 2 v1201
@@ -292,7 +292,7 @@ PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova
 ## Selecting candidate SNPs
 
 
-### Installing tools #3
+### Installing tools /3
 
 BayPass :
 ``` 
