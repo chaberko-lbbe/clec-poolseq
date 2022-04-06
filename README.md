@@ -13,8 +13,8 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Mapping](#Mapping)
 	- [Analysing coverage](#Analysing-coverage)
 
-- **[Detecting Single Nucleotide Polymorphism](#Detecting-Single-Nucleotide-Polymorphism)**
-	- [Overall SNPs analyzes](#Overall-SNPs-analyzes)
+- **[Overall SNPs analyzes](#Overall-SNPs-analyzes)**
+	- [Detecting SNPs](#Detecting-SNPs)
 	- [Performing PCA](#Performing-PCA)
 	- [Computing FST](#Computing-FST)
 
@@ -165,14 +165,14 @@ We choose to exclude of our analysis coverage over 50 bp, which corresponds to >
 
 
 
-## Detecting Single Nucleotide Polymorphism
+## Overall SNPs analyzes
 
 The goal was to understand what differenciates the four *Cimex lectularius* PoolSeq samples: London Lab, London Field, German Lab, Sweden Field. 
 Our hypothesis was that we could be able to find candidate loci correlated with their insecticide resistance phenotypes - resistant for Field strains and susceptible for Lab strains. 
 
 For following analysis, we excluded the scaffold "NC_030043.1", which corresponds to the mitochondrial genome. Indeed, for one copy of the nuclear genome, there are several copies of the nuclear genome. Furthermore, the mitochondrial genome does not evolve like the nuclear genome (not the same mutation rate, no recombination, maternal transmission). 
 
-### Overall SNPs analyzes
+### Detecting SNPs
 
 A SNP (Single Nucleotide Polymorphism) is a ponctual mutation that may be associated with candidate regions for resistance.
 
