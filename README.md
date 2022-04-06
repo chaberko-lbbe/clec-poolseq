@@ -5,7 +5,7 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 ### Table of Contents
 
 - **[Pool-seq data processing](#Pool-seq-data-processing)**
-	- [Installing tools](#Installing-tools)
+	- [Installing tools #1](#Installing-tools-#1)
 	- [Getting the data](#Getting-the-data)
 	- [Trimming](#Trimming)
 	- [Removing duplicates](#Removing-duplicates)
@@ -13,14 +13,14 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Analysing coverage](#Analysing-coverage)
 
 - **[Detecting Single Nucleotide Polymorphism](#Detecting-Single-Nucleotide-Polymorphism)**
-	- [Installing tools](#Installing-tools)
+	- [Installing tools #2](#Installing-tools-#2)
 	- [Overall SNPs analyzes](#Overall-SNPs-analyzes)
 
  - **[Selecting candidate SNPs](#Selecting-candidate-SNPs)**
-	- [Installing tools](#Installing-tools)
-	- [Identifying differentiated SNPs (FST)](#Identifying-differentiated-SNPs-(FST))
-	- [SNPs under selection with contrast between phenotypes (BayPass)](#SNPs-under-selection-with-contrast-between-phenotypes-(BayPass))
-	- [Selecting alternative alleles](#Selecting-alternative-alleles)
+	- [Installing tools #3](#Installing-tools-#3)
+	- [Differentiated FST](#Differentiated-FST)
+	- [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes)
+	- [Alternative alleles](#Alternative-alleles)
 
 ## Pool-seq data processing
 
@@ -29,7 +29,7 @@ We used the recent reference genome and annotation, avalaible here: https://www.
 
 We will have to download a few softs.
 
-### Installing tools
+### Installing tools #1
 
 Here are the tools and versions used: 
 - FastQC 
@@ -170,7 +170,7 @@ Our hypothesis was that we could be able to find candidate loci correlated with 
 
 For following analysis, we excluded the scaffold "NC_030043.1", which corresponds to the mitochondrial genome. Indeed, for one copy of the nuclear genome, there are several copies of the nuclear genome. Furthermore, the mitochondrial genome does not evolve like the nuclear genome (not the same mutation rate, no recombination, maternal transmission). 
 
-### Installing tools
+### Installing tools #2
 
 Here are the tools and versions used: 
 - PoPoolation 2 v1201
@@ -292,18 +292,22 @@ PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova
 ## Selecting candidate SNPs
 
 
-### Installing tools
+### Installing tools #3
 
 BayPass :
 ``` 
 /your-path/Tools/BayPass/baypass_2.2/sources/g_baypass
 ```
 
-### Identifying differentiated SNPs (FST)
+### Differentiated FST
 
-1st step // Input data for BayPass:
-We can convert Poolfstat SNPs data into BayPass input format.
 
+
+### Selection with contrast between phenotypes
+
+We performed a contrast analysis to identify SNPs associated with populations ecotypes. This trait (populations' ecotype) being binary, we can use C2 statistic (Olazcuaga et al., 2019) to identify those SNPs, rather than parametric models used to estimates Bayes' Factor (BF).
+
+First, we converted Poolfstat SNPs data into BayPass input format:
 ```
 pooldata2genobaypass(pooldata_sub,
                      writing.dir = getwd(), # directory where to create the files
@@ -357,13 +361,7 @@ We then merged two of output files together: poolfstatdata_220321_summary_contra
 > /your-path/PoolSeq_Clec/BayPass/baypass_220321_results.txt")
 
 
-
-### SNPs under selection with contrast between phenotypes (BayPass)
-
-We performed a contrast analysis to identify SNPs associated with populations ecotypes. This trait (populations' ecotype) being binary, we can use C2 statistic (Olazcuaga et al., 2019) to identify those SNPs, rather than parametric models used to estimates Bayes' Factor (BF).
-
-
-### Selecting alternative alleles
+### Alternative alleles
 
 
 
