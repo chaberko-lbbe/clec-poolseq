@@ -331,291 +331,38 @@ poolfstatdata_220321.genobaypass
 3 7 0 7 0 3 0 10
 8 2 4 2 4 0 6 5
 ```
-This corresponds to 2 markers and 4 populations: 1st SNP -> 3 copies of 1st allele in 1st population, 7 copies of 2nd allele in 1st population,... 0 copies of 1st allele in 2nd population, 3 copies of 2nd allele in 2nd population,...
+This corresponds to 2 markers and 4 populations
+
+1st line : 1st SNP (marker) -> 3 copies of 1st allele in 1st population ; 7 copies of 2nd allele in 1st population ; 0 copies of 1st allele in 2nd population ; 7 copies of 2nd allele in 2nd population ; ...
 
 We need two other files to make our analysis:
 
 A file containing haploid sizes for pool-seq data:
 ```
-poolfstatdata_110221.poolsize
+poolfstatdata_220321.poolsize
 30 30 30 30
 ```
 
-And a contrast file, to do analysis in association with binary traits. It allows calculate contrast of standardised allele frequencies between 2 population groups. The group membership for each population is '1' for the first group, '-1' for the alternative group, and '0' if excluded from the contrast analysis.
+And a contrast file, to do analysis in association with binary traits. It allowed to compute contrast of standardized allele frequencies between 2 population groups. The group membership for each population is '1' for the first group, '-1' for the alternative group, and '0' if excluded from the contrast analysis.
 
-For populations in this order: German Lab (GL), London Field (LF), Sweden Field (SF), London Lab (LL) ; we want to compute a contrast between Lab and Field populations:
+For populations in this order: German Lab (GL), London Field (LF), Sweden Field (SF), London Lab (LL). We want to compute a contrast between Lab and Field populations:
 ```
-poolfstatdata_110221.ecotype
+poolfstatdata_220321.ecotype
 1 -1 -1 1 
 ```
 
-Since our data are very large (10 139 943 SNPs), we first divided the input file to have 10 000 SNPs/file, i.e. 1014 files:
 ```
-cd /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/
-mkdir split_input
-split -dl 10000 poolfstatdata_110221.geno --additional-suffix=.geno /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/poolfstatdata_110221_
+mkdir /your-path/PoolSeq_Clec/BayPass/
+cd /your-path/PoolSeq_Clec/BayPass/
+
+baypass=/your-path/Tools/BayPass/baypass_2.2/sources/g_baypass
+$baypass -gfile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_220321"+nb+".geno -poolsizefile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_220321.poolsize -d0yij 6 -contrastfile /your-path/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_220321.ecotype -efile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_220321.ecotype -outprefix poolfstatdata_220321
 ```
 
-For each input, a corresponding job file is created:
-```
-mkdir split_output
-
-python
->>> 
-import os 
-import re
-for filename in os.listdir("/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/"):
-        if filename.endswith(".geno"): 
-          nb=re.sub('.*110221_','',filename)
-          nb=re.sub('.geno','',nb)
-          w = open("/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/Cimex_BayPassjob_"+nb+".sh",'w')
-          w.write("#!/bin/bash\n")
-          w.write("#SBATCH --cpus-per-task=1\n")
-          w.write("#SBATCH --mem 10G\n")
-          w.write("#SBATCH --exclude=pbil-deb[27]\n")
-          w.write("#SBATCH -t 2:00:00\n")
-          w.write("#SBATCH -e /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_output/baypass_"+nb+".error\n")
-          w.write("#SBATCH -o /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_output/baypass_"+nb+".out\n")
-          w.write("#SBATCH -J Cimex_BaypassJob_"+nb+"\n")
-          w.write("date;hostname;pwd\n")
-          w.write("baypass=/beegfs/data/soft/BayPass/baypass_2.2/sources/g_baypass\n")
-          w.write("$baypass -gfile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/poolfstatdata_110221_"+nb+".geno -poolsizefile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.poolsize -d0yij 6 -contrastfile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.ecotype -efile /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.ecotype -outprefix poolfstatdata_110221_"+nb+"")
-          w.write("date")
-```
-
-The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6. We have followed BayPass pipeline for pool-seq data.
-Estimate time running for BayPass on each sub-file is approximately 45 minutes. We can launch all jobs simultaneously using:
-```
-cd /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input/
-for file in ls *sh
-do
-    sbatch $file
-done
-```
-
-Before concatenating the outputs, the first line (column names) of each file must be remove:
-```
-sed -i '1d' *constrast.out
-sed -i '1d' *_summary_betai_reg.out
-```
-
-Concatenate the outputs:
-```
-ls -v poolfstatdata_110221_*_summary_contrast.out | xargs cat > poolfstatdata_110221_all_summary_contrast.out 
-ls -v poolfstatdata_110221_*_summary_betai_reg.out | xargs cat > poolfstatdata_110221_all_summary_betai_reg.out 
-# To make sure that the files are in "numerical" order
-```
-
-Check that the two files we want to paste have the same number of lines:
-```
-wc -l /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.snpdet # 10 139 943
-wc -l poolfstatdata_110221_all_summary_contrast.out # 10 139 943
-wc -l poolfstatdata_110221_all_summary_betai_reg.out # 10 139 943
-```
-
-Add column names:
-```
-sed  -i '1i SCAFFOLD POSITION REF ALT' /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.snpdet
-sed  -i '1i CONTRAST MRK M_C2 SD_C2 C2_std log10(1/pval)' /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_output/poolfstatdata_110221_all_summary_contrast.out
-sed  -i '1i COVARIABLE MRK M_Pearson SD_Pearson BF(dB) Beta_is SD_Beta_is eBPis' /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_output/poolfstatdata_110221_all_summary_betai_reg.out
-```
-
-Paste tables:
-```
-paste /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.snpdet poolfstatdata_110221_all_summary_contrast.out > poolfstatdata_110221_all_summary_contrast_snpdet.out
-paste /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_110221.snpdet poolfstatdata_110221_all_summary_betai_reg.out > poolfstatdata_110221_all_summary_betai_reg_snpdet.out
-```
-
-Open R on the cluster:
-```
-/beegfs/data/soft/R-3.5.2/bin/R
-contrast=read.table("poolfstatdata_110221_all_summary_contrast_snpdet.out")
-contrast <- contrast[-1, ]
-contrast <- contrast[,-c(5,6)] # Remove column CONTRAST (only 1) and MRK (1:10000 for each subset file)
-colnames(contrast) <- c("SCAFFOLD","POSITION","REF","ALT","M_C2","SD_C2",
-"C2_std","LOG") # LOG=log10(1/pval)
-dim(contrast) # [1] 10139943        8
-contrast <- contrast[!(contrast$SCAFFOLD=="NC_030043.1"),] # Remove mitochondrial
-dim(contrast) #[1] 10139835        8
-contrast$LOG <- as.numeric(as.character(contrast$LOG))
-
-betai=read.table("poolfstatdata_110221_all_summary_betai_reg_snpdet.out")
-betai <- betai[-1, ]
-betai <- betai[,-c(5,6)] # Remove column CONTRAST (only 1) and MRK (1:10000 for each subset file)
-colnames(betai) <- c("SCAFFOLD","POSITION","REF","ALT","M_Pearson",
-"SD_Pearson","BF.dB","Beta_is","SD_Beta_is","eBPis") # BF.dB = BF(dB)
-dim(betai) # [1] 10139943        8
-betai <- betai[!(test3$SCAFFOLD=="NC_030043.1"),] # Remove mitochondrial
-dim(betai) #[1] 10139835       10
-betai$BF.dB <- as.numeric(as.character(betai$BF.dB))
-
-summary(contrast)
-         M_C2                 SD_C2                 C2_std        
- 0.68335906:       5   0.87546325:       5   0.00000000:     531  
- 0.68453837:       5   0.93783286:       5   0.00000001:     400  
- 0.70137523:       5   0.94074307:       5   0.00000002:     279  
- 0.70264553:       5   0.94538022:       5   0.00000003:     220  
- 0.71227663:       5   1.00928620:       5   0.00000004:     189  
- 0.71717973:       5   1.01447543:       5   0.00000005:     161  
- (Other)   :10139913   (Other)   :10139913   (Other)   :10138163  
-      LOG        
- Min.   :0.0000  
- 1st Qu.:0.1398  
- Median :0.3639  
- Mean   :0.4971  
- 3rd Qu.:0.7124  
- Max.   :8.4857  
-
-summary(betai) 
-       M_Pearson             SD_Pearson           BF.dB        
- -0.00120966:       5   0.54029289:       9   Min.   :-16.755  
- -0.00761172:       5   0.51934770:       8   1st Qu.: -7.034  
- -0.01160689:       5   0.52120184:       8   Median : -5.397  
- -0.01261898:       5   0.52303979:       8   Mean   : -5.139  
- -0.02761936:       5   0.52951295:       8   3rd Qu.: -3.858  
- -0.04455849:       5   0.53196095:       8   Max.   : 59.787  
- (Other)    :10139805   (Other)   :10139786                    
-        Beta_is              SD_Beta_is              eBPis         
- -0.00064555:      18   0.01555728:      17   0.00321555:       7  
- 0.00277646 :      18   0.01961458:      17   0.03123584:       7  
- 0.00074518 :      17   0.01459807:      16   0.04042228:       7  
- -0.00475267:      16   0.01537673:      16   0.07455867:       7  
- 0.00052373 :      16   0.01680086:      16   0.08742999:       7  
- 0.00082491 :      16   0.01717066:      16   0.00012522:       6  
- (Other)    :10139734   (Other)   :10139737   (Other)   :10139794  
-```
+The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6. We followed BayPass pipeline for pool-seq data.
 
 We are looking for markers with C2 value significantly different from 0 (low p-value), which means that those markers are associated with the population ecotype (here, field vs lab strains). Since Bayes Factor (BF) measures the likelihood of a model under selection, we also track high BF.
 The resulting C2 contrasts (and BF) might then be plotted (and compared) as follows:
-```
-#check the behavior of the p-values associated to the C2
-hist(10**(-1*test$LOG),freq=F,breaks=100)
-abline(h=1, col="red")
 
-plot(betai$BF.dB, test$LOG, xlab="BF",ylab="C2 p-value (-log10 scale)", pch=20)
-abline(h=3,lty=2,col="blue") #0.001 p--value theshold
-abline(v=20,lty=2,col="red") #BF threshold for decisive evidence (according to Jeffreys' rule)
-```
-
-<img src="plot_poolfstatdata_110221_hist.png" style="background:none; border:none; box-shadow:none;">
-
-The histogram representing the associated p-values is not regular.
-
-How many selected points are in the top right corner of the plot?
-```
-all <- merge(x = contrast[ , c("SCAFFOLD","POSITION","LOG")], y = betai[ , c("SCAFFOLD","POSITION","BF.dB")], by=c("SCAFFOLD","POSITION"),)
-write.table(all, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_110221_results.txt")
-
-outliers <- all[(all$BF.dB>20 & all$LOG>3),]
-dim(outliers) # [1] 261   4
-write.table(outliers, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_110221_outliers.txt")
-```
-Here we have selected 261 SNPs that might be subjected to selection according to our BayPass analysis between field and laboratory populations.
-
-We now use the sub-poolfstat data, with more stringent parameters: min.cov.per.pool = 10 (previously = -1), max.cov.per.pool = 200 (previously = 1e+06), min.maf = 0.05 (previously = 0.01).
-Note: we tried to subset the result table, but LOG values were different from when running BayPass with a subset input SNPs file.
-
-```
-mkdir split_input_sub
-split -dl 10000 poolfstatdata_sub_110221.geno --additional-suffix=.geno /beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/split_input_sub/poolfstatdata_sub_110221_
-```
-
-As before, we have created jobs for each input files, and launching them all simultaneously. The first line (column name) of each ouput file with 10000 lines must be removed before concatenating the outputs. Output files are then pasted with snps_det fail, containing all informations about SNP positions and scaffold name. Files are then processed with R as above (on data not undersampled).
-
-The resulting C2 contrasts (and BF) might then be plotted (and compared) as follows:
-```
-#check the behavior of the p-values associated to the C2
-hist(10**(-1*contrast$LOG),freq=F,breaks=100)
-abline(h=1, col="red")
-
-plot(betai$BF.dB, contrast$LOG, xlab="BF",ylab="C2 p-value (-log10 scale)", pch=20)
-abline(h=3,lty=2,col="blue") #0.001 p--value theshold
-abline(v=20,lty=2,col="red") #BF threshold for decisive evidence (according to Jeffreys' rule)
-```
-<img src="plot_poolfstatdata_sub_110221.png" style="background:none; border:none; box-shadow:none;">
-
-We can observe an histogramm with anti-conservative p-values, which seems much more reliable.
-
-How many selected points are in the top right corner of the plot?
-```
-all <- merge(x = contrast[ , c("SCAFFOLD","POSITION","LOG")], y = betai[ , c("SCAFFOLD","POSITION","BF.dB")], by=c("SCAFFOLD","POSITION"),)
-write.table(all, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_sub_110221_results.txt")
-
-outliers <- all[(all$BF.dB>20 & all$LOG>3),]
-dim(outliers) # 168
-write.table(outliers, file="/beegfs/data/chaberkorn/PoolSeq_Clec/BayPass/baypass_sub_110221_outliers.txt")
-```
-Here we have selected 168 SNPs that might be subjected to selection according to our BayPass analysis between field and laboratory populations.
-
-
-### Mapping areas under selection
-
-We now need to map those outliers on linkage group (LG) and without LG, to see if their positions coincide with the presence of high FSTs between resistant and susceptible strains. We only work on sub_outliers_wo_LG as p-values distribution seem to show less bias.
-First, we do not use LG :
-
-```
-sub_outliers <- read.table(file="~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/BayPass/baypass_sub_110221_outliers.txt", 
-                           sep=" ", header=T)
-colnames(sub_outliers) <- c("scaffold","position","LOG","BF.dB")
-sub_outliers[,1] <- substring(sub_outliers[,1],1,12)
-
-load("/Users/chloe/Documents/Cluster/Envir_FST_Poolfstat.RData")
-
-# Since we are working on outliers detected on pooldata_sub, we shoud use these files :
-dim(PairwiseFST_all$PairwiseSnpFST)
-dim(pooldata_sub@snp.info)
-# Verify same dim()
-
-data_FST <- cbind(pooldata_sub@snp.info,PairwiseFST_all$PairwiseSnpFST)
-data_FST <- as.data.frame(data_FST)
-colnames(data_FST) <-c("scaffold","position","ref","alt","GL_vs_LF","GL_vs_SF",
-                       "GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL")
-# Clean our table :
-data_FST[,1] <- substring(data_FST[,1],1,12) # 5 722 762
-data_FST <- data_FST[!(data_FST$scaffold=="NC_030043.1"),] # 5 722 749
-data_FST <- data_FST[,-c(3,4)] # enlever col ref et alt
-
-summary(data_FST) # warning : all variables are characters
-data_FST$position <- as.numeric(data_FST$position)
-data_FST$GL_vs_LF <- as.numeric(data_FST$GL_vs_LF)
-data_FST$GL_vs_SF <- as.numeric(data_FST$GL_vs_SF)
-data_FST$GL_vs_LL <- as.numeric(data_FST$GL_vs_LL)
-data_FST$LF_vs_SF <- as.numeric(data_FST$LF_vs_SF)
-data_FST$LF_vs_LL <- as.numeric(data_FST$LF_vs_LL)
-data_FST$SF_vs_LL <- as.numeric(data_FST$SF_vs_LL)
-
-data_FST$Colour="black"
-data_FST$Colour[(data_FST$GL_vs_LF > quantile(data_FST$GL_vs_LF, 0.99, na.rm=T) 
-                   & data_FST$GL_vs_SF > quantile(data_FST$GL_vs_SF, 0.99, na.rm=T)
-                   & data_FST$LF_vs_LL > quantile(data_FST$LF_vs_LL, 0.99, na.rm=T)
-                   & data_FST$SF_vs_LL > quantile(data_FST$SF_vs_LL, 0.99, na.rm=T))]="red"
-
-nb_FST <- data_FST[data_FST$Colour == "red",] # 231 FST R≠S q99
-
-# Create a column to know which lines are BayPass outliers :
-sub_outliers$out <- "yes" 
-sub_outliers_wo_LG <- merge(x = data_FST[ , c("scaffold","GL_vs_LF","GL_vs_SF","GL_vs_LL","LF_vs_SF","LF_vs_LL","SF_vs_LL","position","Colour")], 
-                         y = sub_outliers[ , c("scaffold","position","out")], by=c("scaffold","position"),all=T)
-
-library(dplyr)
-sub_outliers_wo_LG$X <- 1:length(sub_outliers_wo_LG$scaffold)
-sub_outliers_wo_LG <- sub_outliers_wo_LG %>% arrange(position)
-sub_outliers_wo_LG <- sub_outliers_wo_LG %>% arrange(scaffold)
-sub_outliers_wo_LG <- sub_outliers_wo_LG %>% arrange(Colour)
-
-View(sub_outliers_wo_LG)
-
-nb_FST_out <- subset(sub_outliers_wo_LG , sub_outliers_wo_LG$Colour == "red" & sub_outliers_wo_LG$out == "yes")
-# 16 SNPs combine both criteria
-
-library(scales)
-cols <- sub_outliers_wo_LG$Colour
-plot(x=sub_outliers_wo_LG$X,y=sub_outliers_wo_LG$LF_vs_LL, ylab="", xlab="", pch=20, main="FST LF_vs_LL", col=alpha(cols, 0.4))
-points(x=sub_outliers_wo_LG$X[sub_outliers_wo_LG$out == "yes"], 
-       y=sub_outliers_wo_LG$LF_vs_LL[sub_outliers_wo_LG$out == "yes"],
-       pch = 20, col =alpha("blue", 0.4))
-```
-
-<img src="plot_FST_baypass_in_blue.png" width="792" height="546" style="background:none; border:none; box-shadow:none;">
 
 
