@@ -18,18 +18,9 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 
  - **[Selecting candidate SNPs](#Selecting-candidate-SNPs)**
 	- [Installing tools](#Installing-tools)
-	- [Overall SNPs analyzes](#Overall-SNPs-analyzes)
-
-
-
-- **[Genetic polymorphism within populations](#Genetic-polymorphism-within-populations)**
-	- [Installing tools](#Installing-tools)
-	- [Compute pi and Tajima's D](#Compute-pi-and-Tajimas-D)
-
-- **[Evidence of selection](#Evidence-of-selection)**
-	- [Installing tools](#Installing-tools)
-	- [Identifying genetic markers under selection](#Identifying-genetic-markers-under-selection)
-	- [Mapping areas under selection](#Mapping-areas-under-selection)
+	- [Identifying differentiated SNPs (FST)](#Identifying-differentiated-alleles-(FST))
+	- [SNPs under selection with contrast between phenotypes (BayPass)](#SNPs-under-selection-with-contrast-between-phenotypes-(BayPass))
+	- [Selecting alternative alleles](#Selecting-alternative-alleles)
 
 ## Pool-seq data processing
 
@@ -38,7 +29,7 @@ We used the recent reference genome and annotation, avalaible here: https://www.
 
 We will have to download a few softs.
 
-### Install tools
+### Installing tools
 
 Here are the tools and versions used: 
 - FastQC 
@@ -170,14 +161,16 @@ We choose to exclude of our analysis coverage over 50 bp, which corresponds to >
 
 
 
-## Genetic differenciation of populations
+
+
+## Detecting Single Nucleotide Polymorphism
 
 The goal was to understand what differenciates the four *Cimex lectularius* PoolSeq samples: London Lab, London Field, German Lab, Sweden Field. 
 Our hypothesis was that we could be able to find candidate loci correlated with their insecticide resistance phenotypes - resistant for Field strains and susceptible for Lab strains. 
 
 For following analysis, we excluded the scaffold "NC_030043.1", which corresponds to the mitochondrial genome. Indeed, for one copy of the nuclear genome, there are several copies of the nuclear genome. Furthermore, the mitochondrial genome does not evolve like the nuclear genome (not the same mutation rate, no recombination, maternal transmission). 
 
-### Install tools
+### Installing tools
 
 Here are the tools and versions used: 
 - PoPoolation 2 v1201
@@ -185,7 +178,7 @@ Here are the tools and versions used:
 
 They will be store in /your-path/Tools.
 
-### Detecting SNPs
+### Overall SNPs analyzes
 
 A SNP (Single Nucleotide Polymorphism) is a ponctual mutation that may be associated with candidate regions for resistance.
 
@@ -284,10 +277,6 @@ poplist.names <- c("German Lab", "London Field","Sweden Field","London Lab")
 plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 vs PC2
 plot(res, option = "manhattan")
 ```
-
-### Compute FST
-
-
 For each SNP, we can compute SNP-specific pairwise FST for each comparisons between strains (GL_vs_LF, GL_vs_SF, GL_vs_LL, LF_vs_SF, LF_vs_LL, SF_vs_LL), thanks to the option "output.snp.values = TRUE": 
 ``` 
 PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova",
@@ -299,9 +288,9 @@ PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova
 
 
 
-## Evidence of selection
 
-We performed a contrast analysis to identify SNPs associated with populations ecotypes. This trait (populations' ecotype) being binary, we can use C2 statistic (Olazcuaga et al., 2019) to identify those SNPs, rather than parametric models used to estimates Bayes' Factor (BF).
+## Selecting candidate SNPs
+
 
 ### Installing tools
 
@@ -310,7 +299,7 @@ BayPass :
 /your-path/Tools/BayPass/baypass_2.2/sources/g_baypass
 ```
 
-### Identifying genetic markers under selection
+### Identifying differentiated SNPs (FST)
 
 1st step // Input data for BayPass:
 We can convert Poolfstat SNPs data into BayPass input format.
@@ -351,6 +340,7 @@ poolfstatdata_220321.ecotype
 1 -1 -1 1 
 ```
 
+Running Baypass:
 ```
 mkdir /your-path/PoolSeq_Clec/BayPass/
 cd /your-path/PoolSeq_Clec/BayPass/
@@ -361,8 +351,20 @@ $baypass -gfile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_220321"+nb+".geno 
 
 The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6. We followed BayPass pipeline for pool-seq data.
 
-We are looking for markers with C2 value significantly different from 0 (low p-value), which means that those markers are associated with the population ecotype (here, field vs lab strains). Since Bayes Factor (BF) measures the likelihood of a model under selection, we also track high BF.
-The resulting C2 contrasts (and BF) might then be plotted (and compared) as follows:
+We were looking for markers with C2 value significantly different from 0 (low p-value), which means that those markers are associated with the population ecotype (here, field vs lab strains). Since Bayes Factor (BF) measures the likelihood of a model under selection, we also tracked high BF.
+
+We then merged two of output files together: poolfstatdata_220321_summary_contrast_snpdet.out and poolfstatdata_220321_summary_betai_reg_snpdet.out
+> /your-path/PoolSeq_Clec/BayPass/baypass_220321_results.txt")
+
+
+
+### SNPs under selection with contrast between phenotypes (BayPass)
+
+We performed a contrast analysis to identify SNPs associated with populations ecotypes. This trait (populations' ecotype) being binary, we can use C2 statistic (Olazcuaga et al., 2019) to identify those SNPs, rather than parametric models used to estimates Bayes' Factor (BF).
+
+
+### Selecting alternative alleles
+
 
 
 
