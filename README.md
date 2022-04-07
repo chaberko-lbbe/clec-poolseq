@@ -341,12 +341,15 @@ data$nucleotides <- str_to_upper(data$nucleotides) # all nucleotides in upper ca
 
 # Check for differences between Poolfstat "ref" allele and reference genome "nucleotides"
 wrong_ref <- (data$ref != data$nucleotides) & (data$alt ==  data$nucleotides)
+wrong_ref_count <- data[(data$ref != data$nucleotides) & (data$alt ==  data$nucleotides),] 
+# 2,175,417 SNPs
 
 true_ref <- (data$ref == data$nucleotides) & (data$alt !=  data$nucleotides)
+# 2,075,247 SNPs
 
 # Check whether there are alleles of ref & alt != alleles of the reference genome (harlan strain)
 wrong_all <- (data$ref != data$nucleotides) & (data$alt !=  data$nucleotides)
-# yes indeed !
+# yes indeed ! 1,259 SNPs
 
 # Replace the count of ref by the count of alt 
 library(data.table)
