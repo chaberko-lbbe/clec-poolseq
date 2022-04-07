@@ -353,6 +353,7 @@ wrong_all <- (data$ref != data$nucleotides) & (data$alt !=  data$nucleotides)
 
 # Replace the count of ref by the count of alt 
 library(data.table)
+data <- as.data.table(data)
 data <- data[wrong_ref, LL_ref := LL_tot-LL_ref]
 data <- data[wrong_ref, GL_ref := GL_tot-GL_ref]
 data <- data[wrong_ref, LF_ref := LF_tot-LF_ref]
