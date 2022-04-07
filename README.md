@@ -316,7 +316,7 @@ data <- merge(data, baypass, by.x=c("contig","position"), by.y=c("SCAFFOLD","POS
 
 Since reference allele is "chosen arbitrarily in each pool" by poolfstat, we need to correct it. Indeed, we want the reference allele to match the reference genome allele, i.e. Harlan strain allele.
 
-#1 Add a column reference allele related to Harlan.
+#1 Add a column with reference allele related to Harlan, and correct ref/alt columns
 
 ```{r}
 data_bed <- data[,c(1,2)]
@@ -331,174 +331,45 @@ write.table(data_bed, file = "~/data_bed.txt",quote=F, row.names=F, col.names=F,
 Then, use this tool: https://bedtools.readthedocs.io/en/latest/content/tools/getfasta.html
 ```
 /beegfs/data/chaberkorn/Tools/bedtools2/bin/bedtools getfasta -fi /beegfs/data/chaberkorn/PoolSeq_Clec/GCF_000648675.2_Clec_2.1_genomic.fna -bed data.bed -fo data.fa.out
-
-mv data.fa.out data_out.bed
 ```
 ! Check that there is no number in scientific writing in BED entry ! 
 
+Then, we created a column in our "data" table called "nucleotides" which corresponds to the reference nucleotide extracted from "data.fa.out".
+This column must be formated just as our "ref" and "alt" columns:
 ```{r}
-# Verifier que l'output de bedtools correspond à ce qu'on observait dans le tableau data_all
+data$nucleotides <- str_to_upper(data$nucleotides) # all nucleotides in upper case
 
-data_out <- read.table("~/Desktop/data_out.bed", sep="\t")
-dim(data_out)
+# Check for differences between Poolfstat "ref" allele and reference genome "nucleotides"
+wrong_ref <- (data$ref != data$nucleotides) & (data$alt ==  data$nucleotides)
 
-chr <- seq(from = 1, to = 11148372, by = 2)
-nt <- seq(from = 2, to = 11148372, by = 2)
+true_ref <- (data$ref == data$nucleotides) & (data$alt !=  data$nucleotides)
 
-library(dplyr)
-positions <- filter(data_out, row_number() %in% chr)
-nucleotides <- filter(data_out, row_number() %in% nt)
+# Check whether there are alleles of ref & alt != alleles of the reference genome (harlan strain)
+wrong_all <- (data$ref != data$nucleotides) & (data$alt !=  data$nucleotides)
+# yes indeed !
 
-tab_out <- data.frame(positions, nucleotides)
-colnames(tab_out) <- c("positions","nucleotides")
-
-library(tidyr)
-tab_out <- transform(tab_out, pos=do.call(rbind, strsplit(positions, ':', fixed=TRUE)), stringsAsFactors=F)
-tab_out <- transform(tab_out, position=do.call(rbind, strsplit(pos.2, '-', fixed=TRUE)), stringsAsFactors=F)
-tab_out <- transform(tab_out, scaff=do.call(rbind, strsplit(pos.1, '>', fixed=TRUE)), stringsAsFactors=F)
-
-tab_out_ok <- tab_out[,c("nucleotides","position.2","scaff.2")]
-head(data_bed) # checkcolumns names
-colnames(tab_out_ok) <- c("nucleotides","position","contig")
-head(tab_out_ok)
-tab_out_ok$position <- as.numeric(as.character(tab_out_ok$position))
-
-# merge tab_out_ok et data_all
-data_all$position <- as.numeric(as.character(data_all$position))
-data_all = data_all %>% arrange(position)
-
-head(data_all)
-head(tab_out_ok) # verifier que les tableaux sont ordonnes pareil avant le cbind
-
-data_nt <- cbind(data_all, tab_out_ok$nucleotides)
-head(data_nt)
-colnames(data_nt)[52] <- "nucleotides"
-```
-
-
-Pour obtenir les alleles de ref :
-
-```{r}
-head(data_nt) # nucleotide de ref et alt en majuscule
-
-library(stringr)
-# mettre tous les nucleotides en majuscule
-data_nt$nucleotides <- str_to_upper(data_nt$nucleotides) 
-
-# as numeric
-data_nt$LL_ref <- as.numeric(as.character(data_nt$LL_ref))
-data_nt$LL_tot <- as.numeric(as.character(data_nt$LL_tot))
-data_nt$LF_ref <- as.numeric(as.character(data_nt$LF_ref))
-data_nt$LF_tot <- as.numeric(as.character(data_nt$LF_tot))
-data_nt$GL_ref <- as.numeric(as.character(data_nt$GL_ref))
-data_nt$GL_tot <- as.numeric(as.character(data_nt$GL_tot))
-data_nt$SF_ref <- as.numeric(as.character(data_nt$SF_ref))
-data_nt$SF_tot <- as.numeric(as.character(data_nt$SF_tot))
-
-NT = as.data.table(data_nt)
-# si difference allele "ref" =/= "nucleotide du genome de ref" et allele "alt" == "nucleotide"
-wrong_ref <- (NT$ref != NT$nucleotides) & (NT$alt ==  NT$nucleotides) 
-
-wrong_ref_count <- NT[(NT$ref != NT$nucleotides) & (NT$alt ==  NT$nucleotides),] 
-# 2 877 733 alleles "ref" qui sont en realite des alleles alternatifs
-
-
-
-
-
-# problème : certaines lignes ont un snp_count de zéro alors qu'elles sont justement autour d'un SNP ?
-# explication : snp_count >2 pour calcul pi dans popoolation
-
-snp_zero <- NT[(NT$snp_count_LL == 0) & (NT$snp_count_LF ==  0) & (NT$snp_count_GL ==  0) & (NT$snp_count_SF ==  0),] 
-# 18311 
-View(snp_zero)
-
-snp_zero_all <- NT[(NT$snp_count_LL == 0) & (NT$snp_count_LF ==  0) 
-                   & (NT$snp_count_GL ==  0) & (NT$snp_count_SF ==  0) 
-                   & (NT$snp_count_LL_10kb == 0) & (NT$snp_count_LF_10kb ==  0) 
-                   & (NT$snp_count_GL_w10kb ==  0) 
-                   & (NT$snp_count_SF_w10kb ==  0),] # no value
-
-
-
-
-
-
-true_ref_count <- NT[(NT$ref == NT$nucleotides) & (NT$alt !=  NT$nucleotides),] 
-# 2 694 770  alleles "ref" qui sont les memes que l'allele du genome de ref
-
-# verif si il y a des alleles de ref & alt != des allele du genome de ref (harlan strain)
-wrong_all_count <- NT[(NT$ref != NT$nucleotides) & (NT$alt !=  NT$nucleotides),] 
-# 1683 obs (wrong_ref_count + true_ref_count = 5572503 > 5574186 - 5572503 = 1683)
-sum(is.na(NT$ref)) # clean !
-
-# data_all_clean <- read.table("~/Desktop/data_all_clean.txt", sep="\t", header=TRUE)
-# check if position is numeric before !
-# data_all_clean = data_all_clean %>% arrange(position)
-# data_nt = data_nt %>% arrange(position)
-# head(data_all_clean)
-# head(data_nt) # verifier que les tableaux sont ordonnes pareil avant le cbind
-# data_clean_nt <- cbind(data_all_clean, data_nt$nucleotides)
-
-# on remplace le count de ref par le count d'alt 
+# Replace the count of ref by the count of alt 
 library(data.table)
-NT <- NT[wrong_ref, LL_ref := LL_tot-LL_ref]
-NT <- NT[wrong_ref, GL_ref := GL_tot-GL_ref]
-NT <- NT[wrong_ref, LF_ref := LF_tot-LF_ref]
-NT <- NT[wrong_ref, SF_ref := SF_tot-SF_ref]
+data <- data[wrong_ref, LL_ref := LL_tot-LL_ref]
+data <- data[wrong_ref, GL_ref := GL_tot-GL_ref]
+data <- data[wrong_ref, LF_ref := LF_tot-LF_ref]
+data <- data[wrong_ref, SF_ref := SF_tot-SF_ref]
 
-# on remplace l'allele alt par l'allele ref et l'allele ref par le "vrai" allele ref
-NT <- NT[wrong_ref, alt := ref]
-NT <- NT[wrong_ref, ref := nucleotides]
-
-head(NT)
-head(data_nt) # compa pour verifier que ça marche
+# Replace alternative allele by Poolfstat reference allele and Poolfstat reference allele by Harlan reference allele
+data <- data[wrong_ref, alt := ref]
+data <- data[wrong_ref, ref := nucleotides]
 ```
 
-
-#2 Modifier aussi les fq  GL_p, LF_p, SF_p, LL_p
+#2 Modify reference allele frequencies (p)
 
 ```{r}
-# on recalcule les FA de l'allele de ref
-NT$GL_p <- NT$GL_ref/NT$GL_tot
-NT$LL_p <- NT$LL_ref/NT$LL_tot
-NT$LF_p <- NT$LF_ref/NT$LF_tot
-NT$SF_p <- NT$SF_ref/NT$SF_tot
-
-write.table(NT, file = "~/Desktop/data_clean_nt.txt",quote=F, row.names=F, col.names=T, sep="\t")
+data$GL_p <- data$GL_ref/data$GL_tot
+data$LL_p <- data$LL_ref/data$LL_tot
+data$LF_p <- data$LF_ref/data$LF_tot
+data$SF_p <- data$SF_ref/data$SF_tot
 ```
 
 
-#3 Ensuite, on veut identifier les SNPs où LL a l’allele de ref Harlan, et LF l’allele alt
-
-```{r}
-NT <- read.table("~/Desktop/data_clean_nt.txt", sep="\t", header=TRUE)
-
-head(NT)
-# on veut LL ref > 1/2 reads (>1 indiv sur 2 chez LL porte l'allele de ref)
-# & LF ref < 1/2 reads (>1 indiv sur 2 chez LF porte l'allele alt)
-test <-  NT[(NT$LL_ref > NT$LL_tot/2) & (NT$LF_ref < NT$LF_tot/2),] # 298 788 obs
-298788/5574186
-
-test <-  NT[(NT$LL_ref == 1) & (NT$LF_ref == 0),] # 20 491 obs
-
-```
-
-
-
-```{r}
-set1=which(NT$LF_vs_LL > 0.4161941) # 52 502 avec q>99%
-set3=which(NT$BF.dB>20 & NT$LOG_C2>3 & NT$LF_vs_LL > 0.4161941) # 65 avec q99
-set4=which(test$BF.dB>20 & test$LOG_C2>3 & test$LF_vs_LL > 0.4161941) # 24 avec q99
-
-set2=which(test$LF_vs_LL > 0.4161941) # 22 417 avec q>99%
-candidates=test[unique(c(set2)),] 
-
-setwd("~/Desktop")
-write.table(candidates, file = "./Candidates_LLrefLFalt_99.txt",quote=F, row.names = F, col.names = T, sep="\t")
-
-head(candidates)
-```
 
 
 ## Selecting candidate SNPs
@@ -565,6 +436,21 @@ We then merged two of output files together: poolfstatdata_220321_summary_contra
 
 ### Alternative alleles
 
+
+On veut identifier les SNPs où LL a l’allele de ref Harlan, et LF l’allele alt
+
+```{r}
+NT <- read.table("~/Desktop/data_clean_nt.txt", sep="\t", header=TRUE)
+
+head(NT)
+# on veut LL ref > 1/2 reads (>1 indiv sur 2 chez LL porte l'allele de ref)
+# & LF ref < 1/2 reads (>1 indiv sur 2 chez LF porte l'allele alt)
+test <-  NT[(NT$LL_ref > NT$LL_tot/2) & (NT$LF_ref < NT$LF_tot/2),] # 298 788 obs
+298788/5574186
+
+test <-  NT[(NT$LL_ref == 1) & (NT$LF_ref == 0),] # 20 491 obs
+
+```
 
 
 
