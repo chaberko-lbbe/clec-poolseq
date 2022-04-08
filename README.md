@@ -36,7 +36,7 @@ Here are the tools and versions used (on a cluster):
 - Samtools v1.9
 - Bedtools v2.29.1
 - PoPoolation 2 v1201
-- BayPass v2.2
+- BayPass v2.3
 - R v3.5.2
 
 They will be store in /your-path/Tools.
@@ -284,7 +284,11 @@ PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova
 # Warning : here, min.maf by pairs, not for the 4 strains together !
 ``` 
 
-Then, we merged informations together for following analysis:
+## Selecting candidate SNPs
+
+### Differentiated FST
+
+We first merged informations together for following analysis:
 ``` 
 # append  allele frequencies
 ps=pooldata_sub2@refallele.readcount/pooldata_sub2@readcoverage
@@ -306,9 +310,68 @@ data <- data[!(data$contig=="NC_030043.1"),] # Remove mitochondrial : 4,251,923 
 ``` 
 The final dataset contains 4 251 923 loci. However, depending on the comparison the number of SNP conserved differ because of the maf filter (applied for each pairwise comparison).
 
+Then, we
+
+
+### Selection with contrast between phenotypes
+
+We performed a contrast analysis to identify SNPs associated with populations ecotypes. This trait (populations' ecotype) being binary, we can use C2 statistic (Olazcuaga et al., 2019) to identify those SNPs, rather than parametric models used to estimates Bayes' Factor (BF).
+
+First, we converted Poolfstat SNPs data into BayPass input format:
+```
+pooldata2genobaypass(pooldata_sub,
+                     writing.dir = getwd(), # directory where to create the files
+                     prefix = "poolfstatdata_080422", # prefix used for output file names
+                     subsamplesize = -1) # all SNPs are considered in the output
+                     # subsamplingmethod = "thinning")
+```
+
+This created 3 files. The first one contains reads number for each of n SNPs markers of each p sampled populations: it's a matrix with n lines (corresponding to n SNPs) and 2 x p columns (twice the populations number).
+
+Extract:
+```
+poolfstatdata_080422.genobaypass
+3 7 0 7 0 3 0 10
+8 2 4 2 4 0 6 5
+```
+This corresponds to 2 markers and 4 populations
+
+1st line : 1st SNP (marker) -> 3 copies of 1st allele in 1st population ; 7 copies of 2nd allele in 1st population ; 0 copies of 1st allele in 2nd population ; 7 copies of 2nd allele in 2nd population ; ...
+
+We need two other files to make our analysis:
+
+A file containing haploid sizes for pool-seq data:
+```
+poolfstatdata_080422.poolsize
+30 30 30 30
+```
+
+And a contrast file, to do analysis in association with binary traits. It allowed to compute contrast of standardized allele frequencies between 2 population groups. The group membership for each population is '1' for the first group, '-1' for the alternative group, and '0' if excluded from the contrast analysis.
+
+For populations in this order: German Lab (GL), London Field (LF), Sweden Field (SF), London Lab (LL). We want to compute a contrast between Lab and Field populations:
+```
+poolfstatdata_080422.ecotype
+1 -1 -1 1 
+```
+
+Running Baypass:
+```
+mkdir /your-path/PoolSeq_Clec/BayPass/
+cd /your-path/PoolSeq_Clec/BayPass/
+
+baypass=/your-path/Tools/BayPass/baypass_2.3/sources/g_baypass
+$baypass -gfile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_080422.genobaypass -poolsizefile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_080422.poolsize -d0yij 6 -contrastfile /your-path/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_080422.ecotype -efile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_080422.ecotype -outprefix poolfstatdata_080422 -nthreads 16
+```
+
+The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6. We followed BayPass pipeline for pool-seq data.
+
+We were looking for markers with C2 value significantly different from 0 (low p-value), which means that those markers are associated with the population ecotype (here, field vs lab strains). Since Bayes Factor (BF) measures the likelihood of a model under selection, we also tracked high BF.
+
+We then merged (with R for example) two of output files together: poolfstatdata_080422_summary_contrast_snpdet.out and poolfstatdata_080422_summary_betai_reg_snpdet.out, in /your-path/PoolSeq_Clec/BayPass/baypass_080422_results.txt")
+
 We built a table combining all informations:
 ``` 
-baypass=read.table("/Users/chloe/Documents/Cluster/baypass_220321_results.txt", sep=" ")
+baypass=read.table("/Users/chloe/Documents/Cluster/baypass_080422_results.txt", sep=" ")
 colnames(baypass) <- c("contig","position","C2_std","LOG_C2","BF.dB","XtXst","LOG_xtx")
 
 data <- merge(data, baypass, by.x=c("contig","position"), by.y=c("SCAFFOLD","POSITION"), all.y=F) # add baypass to SNP/FST informations
@@ -372,71 +435,6 @@ data$LL_p <- data$LL_ref/data$LL_tot
 data$LF_p <- data$LF_ref/data$LF_tot
 data$SF_p <- data$SF_ref/data$SF_tot
 ```
-
-
-
-
-## Selecting candidate SNPs
-
-### Differentiated FST
-
-
-
-### Selection with contrast between phenotypes
-
-We performed a contrast analysis to identify SNPs associated with populations ecotypes. This trait (populations' ecotype) being binary, we can use C2 statistic (Olazcuaga et al., 2019) to identify those SNPs, rather than parametric models used to estimates Bayes' Factor (BF).
-
-First, we converted Poolfstat SNPs data into BayPass input format:
-```
-pooldata2genobaypass(pooldata_sub,
-                     writing.dir = getwd(), # directory where to create the files
-                     prefix = "poolfstatdata_220321", # prefix used for output file names
-                     subsamplesize = -1) # all SNPs are considered in the output
-                     # subsamplingmethod = "thinning")
-```
-
-This file contains reads number for each of n SNPs markers of each n sampled populations. It is a matrix with n lines (corresponding to n SNPs) and 2 x n columns (twice the populations number).
-
-Extract:
-```
-poolfstatdata_220321.genobaypass
-3 7 0 7 0 3 0 10
-8 2 4 2 4 0 6 5
-```
-This corresponds to 2 markers and 4 populations
-
-1st line : 1st SNP (marker) -> 3 copies of 1st allele in 1st population ; 7 copies of 2nd allele in 1st population ; 0 copies of 1st allele in 2nd population ; 7 copies of 2nd allele in 2nd population ; ...
-
-We need two other files to make our analysis:
-
-A file containing haploid sizes for pool-seq data:
-```
-poolfstatdata_220321.poolsize
-30 30 30 30
-```
-
-And a contrast file, to do analysis in association with binary traits. It allowed to compute contrast of standardized allele frequencies between 2 population groups. The group membership for each population is '1' for the first group, '-1' for the alternative group, and '0' if excluded from the contrast analysis.
-
-For populations in this order: German Lab (GL), London Field (LF), Sweden Field (SF), London Lab (LL). We want to compute a contrast between Lab and Field populations:
-```
-poolfstatdata_220321.ecotype
-1 -1 -1 1 
-```
-
-Running Baypass:
-```
-mkdir /your-path/PoolSeq_Clec/BayPass/
-cd /your-path/PoolSeq_Clec/BayPass/
-
-baypass=/your-path/Tools/BayPass/baypass_2.2/sources/g_baypass
-$baypass -gfile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_220321"+nb+".geno -poolsizefile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_220321.poolsize -d0yij 6 -contrastfile /your-path/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_220321.ecotype -efile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_220321.ecotype -outprefix poolfstatdata_220321
-```
-
-The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6. We followed BayPass pipeline for pool-seq data.
-
-We were looking for markers with C2 value significantly different from 0 (low p-value), which means that those markers are associated with the population ecotype (here, field vs lab strains). Since Bayes Factor (BF) measures the likelihood of a model under selection, we also tracked high BF.
-
-We then merged two of output files together: poolfstatdata_220321_summary_contrast_snpdet.out and poolfstatdata_220321_summary_betai_reg_snpdet.out, in /your-path/PoolSeq_Clec/BayPass/baypass_220321_results.txt")
 
 ### Alternative alleles
 
