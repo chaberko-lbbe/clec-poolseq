@@ -360,14 +360,17 @@ mkdir /your-path/PoolSeq_Clec/BayPass/
 cd /your-path/PoolSeq_Clec/BayPass/
 
 baypass=/your-path/Tools/BayPass/baypass_2.3/sources/g_baypass
-$baypass -gfile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_080422.genobaypass -poolsizefile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_080422.poolsize -d0yij 6 -contrastfile /your-path/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_080422.ecotype -efile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_080422.ecotype -outprefix poolfstatdata_080422 -nthreads 16
+$baypass -gfile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_080422.genobaypass \
+-poolsizefile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_080422.poolsize -d0yij 6 \
+-contrastfile /your-path/PoolSeq_Clec/BayPass/baypass_input/poolfstatdata_080422.ecotype \
+-efile /your-path/PoolSeq_Clec/BayPass/poolfstatdata_080422.ecotype -outprefix poolfstatdata_080422 -nthreads 16
 ```
 
 The initial delta (δ) of the distribution of the yij proposal (-d0yij parameter) is generally 1/5 of the size of the smallest pool: 30/5=6. We followed BayPass pipeline for pool-seq data.
 
 We were looking for markers with C2 value significantly different from 0 (low p-value), which means that those markers are associated with the population ecotype (here, field vs lab strains). Since Bayes Factor (BF) measures the likelihood of a model under selection, we also tracked high BF.
 
-We then merged (with R for example) two of output files together: poolfstatdata_080422_summary_contrast_snpdet.out and poolfstatdata_080422_summary_betai_reg_snpdet.out, in /your-path/PoolSeq_Clec/BayPass/baypass_080422_results.txt")
+We then merged (with R for example) two of output files together: poolfstatdata_080422_summary_contrast.out.out and poolfstatdata_080422_summary_betai_reg.out, in /your-path/PoolSeq_Clec/BayPass/baypass_080422_results.txt")
 
 We built a table combining all informations:
 ``` 
