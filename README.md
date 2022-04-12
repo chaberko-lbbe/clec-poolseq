@@ -23,6 +23,9 @@ Contact : chloe.haberkorn@univ-lyon1.fr
 	- [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes)
 	- [Alternative alleles](#Alternative-alleles)
 
+ - **[Copy Number Variation](#Copy-Number-Variation)**
+ 	- [Computing average coverage by gene](#Computing-average-coverage-by-gene)
+	- [Selecting amplified genes](#Selecting-amplified-genes)
 
 
 
@@ -456,6 +459,13 @@ test <-  NT[(NT$LL_ref > NT$LL_tot/2) & (NT$LF_ref < NT$LF_tot/2),] # 298 788 ob
 test <-  NT[(NT$LL_ref == 1) & (NT$LF_ref == 0),] # 20 491 obs
 
 ```
+
+## Copy Number Variation
+
+### Computing average coverage by gene
+
+### Selecting amplified genes
+
 
 
 
