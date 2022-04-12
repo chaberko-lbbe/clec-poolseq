@@ -374,7 +374,7 @@ We then merged (with R for example) two of output files together: poolfstatdata_
 
 We built a table combining all informations:
 ``` 
-baypass=read.table("/Users/chloe/Documents/Cluster/baypass_080422_results.txt", sep=" ")
+baypass=read.table("/your-path/baypass_080422_results.txt", sep=" ")
 colnames(baypass) <- c("contig","position","C2_std","LOG_C2","BF.dB","XtXst","LOG_xtx")
 
 data <- merge(data, baypass, by.x=c("contig","position"), by.y=c("SCAFFOLD","POSITION"), all.y=F) # add baypass to SNP/FST informations
