@@ -622,7 +622,7 @@ lm_cov <- lm(sub_cov_genes_clean$avg_coverage_LF ~ sub_cov_genes_clean$avg_cover
 
 To highlight points above ratio 1.5 for this linear regression, we first added a column to our data, and then plot it:
 ```
-sub_cov_genes_clean$ratio_lm <- (lm_cov$coefficients[2]*sub_cov_genes_clean$avg_coverage)*1.5+lm_cov$coefficients[1]
+sub_cov_genes_clean$ratio_lm <- 1.5*(lm_cov$coefficients[2]*sub_cov_genes_clean$avg_coverage)+lm_cov$coefficients[1]
 
 library(viridisLite)
 gg2 <- ggplot(data = sub_cov_genes_clean, aes(x = avg_coverage, y = avg_coverage_LF)) +
@@ -640,9 +640,9 @@ gg2 <- ggplot(data = sub_cov_genes_clean, aes(x = avg_coverage, y = avg_coverage
   #geom_vline(xintercept=126.76237, size = 0.2, linetype="dashed") +
   geom_hline(yintercept=13.22879, size = 0.2, linetype="dashed") +
   #geom_hline(yintercept=148.84460, size = 0.2, linetype="dashed") +
-  geom_abline(intercept = -1.706 , slope = 1.247*1.5, size = 0.3, col="blue4")+
-  xlim(11.48672,100) + 
-  ylim(13.22879,100)
+  geom_abline(intercept = lm_cov$coefficients[1] , slope = lm_cov$coefficients[2]*1.5, size = 0.3, col="blue4")+
+  xlim(11.48672,140) + 
+  ylim(13.22879,140)
 ```
 
 Finally, we extracted those 25 points which correspond to our final set of 25 CNV, and added all informations:
@@ -654,7 +654,7 @@ set_cnv <- merge(set_cnv,genes_cov_LL_clean, all.x = T, all.y = F, by=c("avg_cov
 
 LG <- read.xlsx(file="/your-path/scaff_LG.xls", sheetName = "Sheet1",
                 header = T)
-common <- intersect(LG$seqid, set_cnv$seqid) # 12 values
+common <- intersect(LG$seqid, set_cnv$seqid) # 12 values (13, but two on NW_019392676.1)
 
 set_cnv <- merge(set_cnv, LG, by=c("seqid"), all.x = T)
 
