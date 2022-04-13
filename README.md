@@ -456,12 +456,255 @@ test <-  NT[(NT$LL_ref > NT$LL_tot/2) & (NT$LF_ref < NT$LF_tot/2),] # 298 788 ob
 298788/5574186
 
 test <-  NT[(NT$LL_ref == 1) & (NT$LF_ref == 0),] # 20 491 obs
-
 ```
 
 ## Copy Number Variation
 
 ### Computing average coverage by gene
+
+We computed coverage per base using bedtools, as in [Analysing coverage](#Analysing-coverage).
+
+Using the gff, we created a table to keep only exonic part, with gene annotation.
+
+```
+gtffile <- file.path("/your-path/GCF_000648675.2_Clec_2.1_genomic.gff") 
+library(ape)
+gff=read.gff(gtffile)
+
+scaff_exons=subset(gff,type == "exon") # 28 5072 rows
+scaff_exons=subset(scaff_exons,source != "RefSeq") # 28 5047 rows
+
+library(tidyverse)
+scaff_exons = separate(data=scaff_exons, 
+                      into=c("ID","gene"),
+                      col=attributes, sep="gene=")
+
+scaff_exons = separate(data=scaff_exons, 
+                       into=c("gene","drop"),
+                       col=gene, sep=";",extra="merge")
+
+scaff_exons = separate(data=scaff_exons, 
+                      into=c("drop2","product"),
+                      col=drop, sep="product=", extra="merge")
+
+scaff_exons = separate(data=scaff_exons, 
+                       into=c("annotation","drop3"),
+                       col=product, sep=";", extra="merge")
+
+scaff_exons <- scaff_exons %>%
+  select(seqid, gene, annotation)
+scaff_exons <- unique(scaff_exons) # 27 760 rows
+
+library(xlsx)
+write.xlsx2(scaff_exons, file="/your-path/scaff_exons.xls", sheetName = "Sheet1", col.names = TRUE, row.names = FALSE, append = FALSE)
+
+# Remove manually all "transcript variant X..." and "%2C" and create a second sheet ("Feuil1") without Trna
+
+scaff_exons = read.xlsx("/your-path/scaff_exons.xls", sheetName = "Feuil1", header=T)
+scaff_exons <- unique(scaff_exons) # 10 494 rows 
+```
+
+We compute a file with a position per base for each exon:
+
+```
+/your-path/Tools/R-3.5.2/bin/R
+
+scaff_exon=read.table("scaff_exon.txt",header=T)
+
+library(dplyr)
+library(tidyr)
+
+exon_perbase <- 
+  scaff_exon %>% 
+  rowwise %>% 
+  mutate(pos = paste(seq(start, 
+                         end), 
+                     collapse = ",")) %>%
+  tidyr::separate_rows(pos) %>%
+  mutate(pos = as.integer(pos))
+```
+
+Coverages were merged by exon for each strain (example here with London Field):
+
+```
+library(dplyr)
+library(tidyr)
+map_LF=read.table("LF_map_cov.txt") 
+colnames(map_LF) <- c("seqid","pos","cov")
+
+genes_cov <- right_join(exon_perbase, map_LF)
+# > Joining, by = c("seqid", "pos")
+
+exon_cov_LF <- genes_cov %>% 
+  group_by(seqid, start, end, gene) %>%
+  summarise(sum_coverage = sum(cov))
+```
+
+We merged exons with the same Gene ID together to build genes. To do so, cumulated length of exons inside a gene was computed, as well as cumulated coverage.
+
+```
+exons_cov_GL=read.table("exons_cov_GL.txt") 
+exons_cov_LF=read.table("exons_cov_LF.txt") 
+exons_cov_GL=read.table("exons_cov_GL.txt") 
+exons_cov_SF=read.table("exons_cov_SF.txt") 
+
+exons_cov_LLlength_exon <- exons_cov_LL_clean$end - exons_cov_LL_clean$start
+exons_cov_LF$length_exon <- exons_cov_LF_clean$end - exons_cov_LF_clean$start
+exons_cov_GL$length_exon <- exons_cov_GL_clean$end - exons_cov_GL_clean$start
+exons_cov_SF$length_exon <- exons_cov_SF_clean$end - exons_cov_SF_clean$start
+
+length(unique(exons_cov_SF_clean$gene)) # 13 482 (+ Trna > 14 342 I guess)
+
+# then merge exon by same gene name :
+
+genes_cov_SF <- exons_cov_SF_clean %>% 
+  group_by(seqid, gene) %>% 
+  summarise_at(c("length_exon","sum_coverage"),sum)
+colnames(genes_cov_SF) <- c("seqid", "gene", "length_gene", "cov_gene")
+
+genes_cov_LF <- exons_cov_LF_clean %>% 
+  group_by(seqid, gene) %>% 
+  summarise_at(c("length_exon","sum_coverage"),sum)
+colnames(genes_cov_LF) <- c("seqid", "gene", "length_gene", "cov_gene")
+
+genes_cov_LL <- exons_cov_LL_clean %>% 
+  group_by(seqid, gene) %>% 
+  summarise_at(c("length_exon","sum_coverage"),sum)
+colnames(genes_cov_LL) <- c("seqid", "gene", "length_gene", "cov_gene")
+
+genes_cov_GL <- exons_cov_GL_clean %>% 
+  group_by(seqid, gene) %>% 
+  summarise_at(c("length_exon","sum_coverage"),sum)
+colnames(genes_cov_GL) <- c("seqid", "gene", "length_gene", "cov_gene")
+
+# Now we can add scaff data 
+
+genes_cov_SF <- merge(genes_cov_SF, scaff_exons, by=c("gene","seqid"), 
+                      all.x = F, all.y = F) # avec seqid car Trna ont meme nom sur diff scaff..
+genes_cov_LF <- merge(genes_cov_LF, scaff_exons, by=c("gene","seqid"), 
+                      all.x = F, all.y = F) # 27 824 pour tous
+genes_cov_LL <- merge(genes_cov_LL, scaff_exons, by=c("gene","seqid"), 
+                      all.x = F, all.y = F)
+genes_cov_GL <- merge(genes_cov_GL, scaff_exons, by=c("gene","seqid"),
+                      all.x = F, all.y = F)
+
+# Keep ONLY ONE product column
+
+View(genes_cov_LL) # check for example "protein Malvolio-like" 
+genes_cov_LL_clean <- genes_cov_LL %>% 
+  group_by(seqid, gene, length_gene) %>% 
+  filter(annotation==min(annotation) | is.na(annotation)) # 9 947
+
+genes_cov_LF_clean <- genes_cov_LF %>% 
+  group_by(seqid, gene, length_gene) %>% 
+  filter(annotation==min(annotation) | is.na(annotation))
+
+genes_cov_GL_clean <- genes_cov_GL %>% 
+  group_by(seqid, gene, length_gene) %>% 
+  filter(annotation==min(annotation) | is.na(annotation))
+
+genes_cov_SF_clean <- genes_cov_SF %>% 
+  group_by(seqid, gene, length_gene) %>% 
+  filter(annotation==min(annotation) | is.na(annotation))
+
+# In "sum_coverage" we have the "cumulated coverage" along the gene for each gene
+
+# Average coverage by base pair : sum_coverage/length of gene
+
+genes_cov_LL_clean$avg_coverage <- genes_cov_LL_clean$cov_gene/genes_cov_LL_clean$length_gene
+genes_cov_LF_clean$avg_coverage <- genes_cov_LF_clean$cov_gene/genes_cov_LF_clean$length_gene
+genes_cov_GL_clean$avg_coverage <- genes_cov_GL_clean$cov_gene/genes_cov_GL_clean$length_gene
+genes_cov_SF_clean$avg_coverage <- genes_cov_SF_clean$cov_gene/genes_cov_SF_clean$length_gene
+
+
+# Histograms of average coverage by gene
+
+genes_cov_LL_clean <- as.data.frame(genes_cov_LL_clean)
+genes_cov_LL_clean$avg_coverage_LF <- genes_cov_LF_clean$avg_coverage
+
+quantile(genes_cov_LL_clean$avg_coverage, probs = c(0.05,0.95)) 
+quantile(genes_cov_LL_clean$avg_coverage_LF, probs = c(0.05,0.95)) 
+
+par(mfrow=c(2,2))
+hist(genes_cov_LL_clean$avg_coverage, breaks=10000, xlim=c(0,100),
+     xlab="Average coverage per gene in London Lab",
+     main="")
+abline(v=13.83524, col="red")
+abline(v=67.34002, col="red")
+
+hist(genes_cov_LF_clean$avg_coverage, breaks=10000, xlim=c(0,100),
+     xlab="Average coverage per gene in London Field",
+     main="")
+abline(v=16.15084, col="blue")
+abline(v=80.81660, col="blue")
+
+# then, we can work on either difference LF - LL
+# or ratio (easier to set a threshold)
+
+genes_cov_LL_clean$diff <- genes_cov_LL_clean$avg_coverage_LF - genes_cov_LL_clean$avg_coverage
+genes_cov_LL_clean$ratio <- genes_cov_LL_clean$avg_coverage_LF/genes_cov_LL_clean$avg_coverage
+
+par(mfrow=c(2,2))
+library(LSD)
+heatscatter(genes_cov_LL_clean$avg_coverage, genes_cov_LL_clean$avg_coverage_LF, 
+            pch=20, xlim=c(0,100), ylim=c(0,100), main="",
+            xlab="Mean gene coverage for London Lab",
+            ylab="Mean gene coverage for London Field")
+
+points(genes_cov_LL_clean$avg_coverage[genes_cov_LL_clean$ratio>1.5],
+       genes_cov_LL_clean$avg_coverage_LF[genes_cov_LL_clean$ratio>1.5], 
+       col = "black", pch = 20,cex=0.5,
+       xlim=c(0,100), ylim=c(0,100))
+
+x <- genes_cov_LL_clean$avg_coverage
+y <- x*1.5
+lines(x,y, col="black", )
+
+abline(v=13.83524, col="red")
+abline(v=67.34002, col="red")
+
+abline(h=16.15084, col="blue")
+abline(h=80.81660, col="blue")
+
+
+heatscatter(genes_cov_LL_clean$avg_coverage, genes_cov_LL_clean$avg_coverage_LF, 
+            pch=20, xlim=c(0,100), ylim=c(0,100), main="",
+            xlab="Mean gene coverage for London Lab",
+            ylab="Mean gene coverage for London Field")
+
+points(genes_cov_LL_clean$avg_coverage[genes_cov_LL_clean$diff>20],
+       genes_cov_LL_clean$avg_coverage_LF[genes_cov_LL_clean$diff>20], 
+       col = "black", pch = 20, cex=0.5,
+       xlim=c(0,100), ylim=c(0,100))
+
+genes_cov_LL_clean$ratio
+
+x <- genes_cov_LL_clean$avg_coverage[genes_cov_LL_clean$ratio]
+y <- x/y
+
+genes_cov_LL_clean$avg_coverage_LF[genes_cov_LL_clean$ratio>2]
+
+
+# Linear regression between coverage of LF and LL
+# then we can isolate 5% or 1% of higher residuals
+genes_cov_LL_clean$res <- resid(mod <- lm(avg_coverage_LF ~ avg_coverage, data = genes_cov_LL_clean))
+
+# abline of linear regression
+abline(mod, col = "blue", lwd = 1)
+
+# The quantile() function can give us the required quantiles of the residuals. You suggested retaining 90% of the data, so we want the upper and lower 0.05 quantiles:
+res.qt <- quantile(genes_cov_LL_clean$res, probs = c(0.95)) # 6.247663
+# or
+res.qt <- quantile(genes_cov_LL_clean$res, probs = c(0.99)) # 11.43706 
+
+# Select those observations with residuals above 99% of the data:
+want <- which(genes_cov_LL_clean$res >= res.qt[1])
+
+# We can then visualise this, with the red points being those we will retain:
+heatscatter(genes_cov_LL_clean$avg_coverage, genes_cov_LL_clean$avg_coverage_LF, 
+            pch=20, xlim=c(0,100), ylim=c(0,100), main="",
+            xlab="Mean gene coverage for London Lab",
+            ylab="Mean gene coverage for London Field")
 
 
 
