@@ -260,18 +260,13 @@ library(pcadapt)
 mat_biall_pca <- mat_biall_poolfstat[1:4,]
 pca<-read.pcadapt(mat_biall_pca, type = "pool")
 res <- pcadapt(pca)
-summary(res)
-
-# PC scores
-res$scores[,1] # Premier axe
-res$scores[,2] # Second axe
-
-hist(res$pvalues, xlab = "p-values", main = NULL, breaks = 50, col = "orange")
-# Confirms that most of the p-values follow an uniform distribution. The excess of small p-values indicates the presence of outliers.
+res$singular.values
+# singular.values is a vector containing the K ordered square root of the proportion of variance explained by each PC.
+PC1=res$singular.values[1]^2
+PC2=res$singular.values[2]^2
 
 poplist.names <- c("German Lab", "London Field","Sweden Field","London Lab")
-plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # Pour voir PC1 vs PC2
-plot(res, option = "manhattan")
+plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # PC1 vs PC2
 ```
 
 ### Computing FST
