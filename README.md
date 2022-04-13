@@ -279,6 +279,8 @@ PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova
                                                    min.maf = -1, 
                                                    output.snp.values = TRUE))
 # Warning : here, min.maf by pairs, not for the 4 strains together !
+
+PairwiseFST_all@PairwiseFSTmatrix # to build Table 2
 ``` 
 
 ## Selecting candidate SNPs
