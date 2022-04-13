@@ -163,7 +163,7 @@ We can compute coverage per base (i.e. number of reads mapping at a position of 
 /your-path/Tools/Tools/bedtools2/bin/bedtools genomecov -ibam SF_mapped_sorted.bam -d > SF_cov.txt
 ```
 
-We choose to exclude of our analysis coverage over 50 bp, which corresponds to >95% quantile for all populations, in order to avoid bias due to very high coverage. Coverages computed here were also used for [Copy Number Variation] analysis.
+We choose to exclude of our analysis coverage over 50 bp, which corresponds to >95% quantile for all populations, in order to avoid bias due to very high coverage. Coverages computed here were also used for [Copy Number Variation](#Copy-Number-Variation) analysis.
 
 
 
