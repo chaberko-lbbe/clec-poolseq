@@ -1,6 +1,6 @@
 ![Image 1](bedbugs.png)
 
-Contact : chloe.haberkorn@univ-lyon1.fr
+Contact : chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 
 ### Table of Contents
 
