@@ -309,8 +309,6 @@ data <- data[!(data$contig=="NC_030043.1"),] # Remove mitochondrial : 4,251,923 
 ``` 
 The final dataset contains 4 251 923 loci. However, depending on the comparison the number of SNP conserved differ because of the maf filter (applied for each pairwise comparison).
 
-Then, we
-
 
 ### Selection with contrast between phenotypes
 
@@ -342,7 +340,7 @@ We need two other files to make our analysis:
 A file containing haploid sizes for pool-seq data:
 ```
 poolfstatdata_080422.poolsize
-30 30 30 30
+60 60 60 56
 ```
 
 And a contrast file, to do analysis in association with binary traits. It allowed to compute contrast of standardized allele frequencies between 2 population groups. The group membership for each population is '1' for the first group, '-1' for the alternative group, and '0' if excluded from the contrast analysis.
