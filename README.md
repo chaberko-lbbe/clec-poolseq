@@ -183,38 +183,38 @@ First, we converted our files in format that can be used by PoPoolation:
 ``` 
 /your-path/Tools/samtools-1.9/bin/samtools index LL_mapped_sorted.bam # do this for all strains
 
-/your-path/samtools-1.9/bin/samtools mpileup -B /your-path/PoolSeq_Clec/Mapped/LL_mapped_sorted.bam /your-path/PoolSeq_Clec/Mapped/LF_mapped_sorted.bam /your-path/PoolSeq_Clec/Mapped/GL_mapped_sorted.bam /your-path/PoolSeq_Clec/Mapped/SF_mapped_sorted.bam > all.mpileup
+/your-path/samtools-1.9/bin/samtools mpileup -B /your-path/PoolSeq_Clec/Mapped/GL_mapped_sorted.bam /your-path/PoolSeq_Clec/Mapped/LF_mapped_sorted.bam /your-path/PoolSeq_Clec/Mapped/SF_mapped_sorted.bam /your-path/PoolSeq_Clec/Mapped/LL_mapped_sorted.bam > all.mpileup
 
 perl /your-path/Tools/popoolation2_1201/mpileup2sync.pl --fastq-type sanger --min-qual 20 --input all.mpileup --output all.sync
 ``` 
 
-The output file 'all.sync' can be used with R/poolfstat to compute SNPs:  
+SNPs can be detected on the output file 'all.sync' using R/poolfstat:  
 
 ``` 
 library(poolfstat)
 
-# wc -l all.sync = 509,820,671
-# Estimate time - 0.36s/Mi lines processed -> 510*0.36 ~ 184 min soit 3h
-# Default parameters - start at 13h45, end at ~17h (189.86 min)
+# wc -l all.sync = 509,820,671 > 1 ligne par position du génome
+# Poolsizes correspond to haploid size (30*2)
+# Here, creating a job on cluster with 8 threads
 
 pooldata = popsync2pooldata(sync.file = "all.sync", 
-                            poolsizes = rep(30,4), 
-                            poolnames = c("GL","LF","SF","LL"), 
+                            poolsizes = c(60,60,60,56), 
+                            poolnames = c("GL","LF","SF","LL"),
                             min.rc = 1,
                             min.cov.per.pool = -1,
                             max.cov.per.pool = 1e+06, 
                             min.maf = 0.01, 
                             noindel = TRUE,
                             nlines.per.readblock = 1e+06, 
-                            nthreads = 1)
-# 509.8207 millions lines processed in 189.86  min.;  10 139 943 SNPs found for 4 Pools
+                            nthreads = 8)
+# 509.8207 millions lines processed in 41.8  min.;  10,139,943 SNPs found SNPs found for 4 Pools
 
 # Do subset of pooldata :
 pooldata_sub <- pooldata.subset(pooldata, pool.index = c(1,2,3,4), 
                                 min.cov.per.pool = 10, 
                                 max.cov.per.pool = 50, 
                                 min.maf = 0.1)
-# pool.index = indexes of the pools (at least two), that should be selected to create the new pooldata objec
+# pool.index = indexes of the pools (at least two), that should be selected to create the new pooldata object
 # min.maf correspond to minimal allowed Minor Allele Frequency
 # max.cov of 50 : corresponds to coverage >q95
 # Data consists of 4,251,927 (4,25 M) SNPs for 4 Pools
@@ -273,14 +273,14 @@ plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # PC1 vs PC2
 
 For each SNP, we can compute SNP-specific pairwise FST for each comparisons between strains (GL_vs_LF, GL_vs_SF, GL_vs_LL, LF_vs_SF, LF_vs_LL, SF_vs_LL), thanks to the option "output.snp.values = TRUE": 
 ``` 
-PairwiseFST_all = na.omit(computePairwiseFSTmatrix(pooldata_sub, method = "Anova",
-						   min.cov.per.pool = -1, 
-                                                   max.cov.per.pool = 1e+06,
-                                                   min.maf = -1, 
-                                                   output.snp.values = TRUE))
+PairwiseFST_all = na.omit(compute.pairwiseFST(pooldata_sub, method = "Anova",
+					      min.cov.per.pool = -1, 
+                                              max.cov.per.pool = 1e+06,
+                                              min.maf = -1, 
+                                              output.snp.values = TRUE))
 # Warning : here, min.maf by pairs, not for the 4 strains together !
 
-PairwiseFST_all@PairwiseFSTmatrix # to build Table 2
+head(PairwiseFST_all@values) # to build Table 2
 ``` 
 
 ## Selecting candidate SNPs
