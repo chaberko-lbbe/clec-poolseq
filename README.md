@@ -51,19 +51,15 @@ We also used R on a computer with packages poolfstat v2.0.0, pcadapt v4.3.3, Var
 ## Pool-seq data processing
 
 The goal is first to map *Cimex lectularius* PoolSeq samples (London Lab, London Field, German Lab and Sweden Field - pools of 30 individuals) on reference genome.
-Fastq files are availaible on SRA: 
-We used the recent reference genome and annotation, avalaible here: https://www.ncbi.nlm.nih.gov/assembly/GCF_000648675.2
-
-We will have to download a few softs.
 
 ### Getting the data
 
-Raw sequences (fastq.gz files):
+Raw sequences (fastq.gz files) are available on SRA: xx
 ```
 mkdir /your-path/PoolSeq_Clec/Raw_Clec
 ```
 
-Reference genome:
+We used the recent reference genome and annotation, avalaible here: https://www.ncbi.nlm.nih.gov/assembly/GCF_000648675.2
 ```
 mkdir /your-path/PoolSeq_Clec/Ref_Clec
 ```
