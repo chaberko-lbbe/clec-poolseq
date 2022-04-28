@@ -210,11 +210,11 @@ pooldata = popsync2pooldata(sync.file = "all.sync",
 pooldata_sub <- pooldata.subset(pooldata, pool.index = c(1,2,3,4), 
                                 min.cov.per.pool = 10, 
                                 max.cov.per.pool = 50, 
-                                min.maf = 0.1)
+                                min.maf = 0.01)
 # pool.index = indexes of the pools (at least two), that should be selected to create the new pooldata object
 # min.maf correspond to minimal allowed Minor Allele Frequency
 # max.cov of 50 : corresponds to coverage >q95
-# Data consists of 4,251,927 (4,25 M) SNPs for 4 Pools
+# Data consists of 8,034,712 SNPs (8,03 M) SNPs for 4 Pools
 ``` 
 
 ### Performing PCA
@@ -240,7 +240,7 @@ fq_LL <- ref_LL/pooldata_sub@readcoverage[,4]
 pooldata_sub@snp.info[,1] <- substring(pooldata_sub@snp.info[,1],1,12)
 SNP <-paste(pooldata_sub@snp.info[,1],pooldata_sub@snp.info[,2] ,sep="_")
 
-mat_biall_poolfstat=matrix(nrow=4,ncol=5722762)
+mat_biall_poolfstat=matrix(nrow=4,ncol=length(pooldata_sub@snp.info))
 colnames(mat_biall_poolfstat) <- SNP
 rownames(mat_biall_poolfstat)=c("GL","LF","SF","LL")
 
