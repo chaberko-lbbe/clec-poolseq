@@ -22,7 +22,7 @@ Contact : chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 	- [Differentiated FST](#Differentiated-FST)
 	- [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes)
 	- [Alternative alleles](#Alternative-alleles)
-	- [(Non-)Synonymous variants?](#(Non-)Synonymous-variants?)
+	- [Synonymous or not](#Synonymous-or-not)
 
  - **[Copy Number Variation](#Copy-Number-Variation)**
  	- [Computing average coverage by gene](#Computing-average-coverage-by-gene)
@@ -451,7 +451,7 @@ test <-  NT[(NT$LL_ref > NT$LL_tot/2) & (NT$LF_ref < NT$LF_tot/2),] # 298 788 ob
 test <-  NT[(NT$LL_ref == 1) & (NT$LF_ref == 0),] # 20 491 obs
 ```
 
-### (Non-)Synonymous variants?
+### Synonymous or not
 
 ## Copy Number Variation
 
