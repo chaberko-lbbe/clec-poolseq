@@ -17,6 +17,7 @@ Contact : chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 	- [Detecting SNPs](#Detecting-SNPs)
 	- [Performing PCA](#Performing-PCA)
 	- [Computing FST](#Computing-FST)
+	- [Subsetting data on Minor Allele Frequency](#Subsetting-data-on-Minor-Allele-Frequency)
 
  - **[Selecting candidate SNPs](#Selecting-candidate-SNPs)**
 	- [Differentiated FST](#Differentiated-FST)
@@ -280,6 +281,15 @@ PairwiseFST_all = na.omit(compute.pairwiseFST(pooldata_sub, method = "Anova",
 
 head(PairwiseFST_all@values) # to build Table 2
 ``` 
+
+### Subsetting data on Minor Allele Frequency
+
+
+
+
+
+
+
 
 ## Selecting candidate SNPs
 
