@@ -17,12 +17,13 @@ Contact : chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 	- [Detecting SNPs](#Detecting-SNPs)
 	- [Performing PCA](#Performing-PCA)
 	- [Computing FST](#Computing-FST)
-	- [Subsetting data on Minor Allele Frequency](#Subsetting-data-on-Minor-Allele-Frequency)
 
  - **[Selecting candidate SNPs](#Selecting-candidate-SNPs)**
 	- [Differentiated FST](#Differentiated-FST)
 	- [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes)
+	- [Subsetting data on Minor Allele Frequency](#Subsetting-data-on-Minor-Allele-Frequency)
 	- [Alternative alleles](#Alternative-alleles)
+	- [Combining conditions](#Combining-conditions)
 	- [Synonymous or not](#Synonymous-or-not)
 
  - **[Copy Number Variation](#Copy-Number-Variation)**
@@ -282,22 +283,6 @@ PairwiseFST_all = na.omit(compute.pairwiseFST(pooldata_sub, method = "Anova",
 head(PairwiseFST_all@values) # to build Table 2
 ``` 
 
-### Subsetting data on Minor Allele Frequency
-
-We used the BayPass software to estimate the nucleotide diversity π for each SNP (see [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes) to know how to run BayPass) 
-
-``` 
-pi=read.table("poolfstatdata_220422_bis_summary_pi_xtx.out",header=T)
-result <- merge(pi, contrast, by="MRK")
-result$MAF <- 0.5-abs(result$M_P-0.5)
-summary(result$M_P) # Min 0.02142 - Max 0.97752 
-summary(result$MAF) # Min 0.02142 - Max 0.5
-``` 
-
-
-
-
-
 
 ## Selecting candidate SNPs
 
@@ -321,10 +306,8 @@ names(data)=c("contig", "position", "ref", "alt",
               paste0(pooldata_sub2@poolnames, "_p"),
               "GL_vs_LF", "GL_vs_SF", "GL_vs_LL","LF_vs_SF" ,"LF_vs_LL","SF_vs_LL")
 
-data <- data[!(data$contig=="NC_030043.1"),] # Remove mitochondrial : 4,251,923 SNPs
+data <- data[!(data$contig=="NC_030043.1"),] # Remove mitochondrial
 ``` 
-The final dataset contains 4 251 923 loci. However, depending on the comparison the number of SNP conserved differ because of the maf filter (applied for each pairwise comparison).
-
 
 ### Selection with contrast between phenotypes
 
@@ -421,14 +404,12 @@ data$nucleotides <- str_to_upper(data$nucleotides) # all nucleotides in upper ca
 # Check for differences between Poolfstat "ref" allele and reference genome "nucleotides"
 wrong_ref <- (data$ref != data$nucleotides) & (data$alt ==  data$nucleotides)
 wrong_ref_count <- data[(data$ref != data$nucleotides) & (data$alt ==  data$nucleotides),] 
-# 2,175,417 SNPs
 
 true_ref <- (data$ref == data$nucleotides) & (data$alt !=  data$nucleotides)
-# 2,075,247 SNPs
 
 # Check whether there are alleles of ref & alt != alleles of the reference genome (harlan strain)
 wrong_all <- (data$ref != data$nucleotides) & (data$alt !=  data$nucleotides)
-# yes indeed ! 1,259 SNPs
+# yes, indeed!
 
 # Replace the count of ref by the count of alt 
 library(data.table)
@@ -452,24 +433,58 @@ data$LF_p <- data$LF_ref/data$LF_tot
 data$SF_p <- data$SF_ref/data$SF_tot
 ```
 
-### Alternative alleles
+### Subsetting data on Minor Allele Frequency
 
+We used the BayPass software to estimate the nucleotide diversity "π" for each SNP (see [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes) to know how to run BayPass). With π, we were then able to compute "MAF", the minor allele frequency:
 
-On veut identifier les SNPs où LL a l’allele de ref Harlan, et LF l’allele alt
+``` 
+pi=read.table("poolfstatdata_080422_summary_pi_xtx.out",header=T)
+pi$MAF <- 0.5-abs(result$M_P-0.5)
+summary(pi$M_P) # Min 0.02142 - Max 0.97752 
+summary(pi$MAF) # Min 0.02142 - Max 0.5
 
-```{r}
-NT <- read.table("~/Desktop/data_clean_nt.txt", sep="\t", header=TRUE)
+pi_sub <- pi[pi$MAF>0.2,]
+``` 
 
-head(NT)
-# on veut LL ref > 1/2 reads (>1 indiv sur 2 chez LL porte l'allele de ref)
-# & LF ref < 1/2 reads (>1 indiv sur 2 chez LF porte l'allele alt)
-test <-  NT[(NT$LL_ref > NT$LL_tot/2) & (NT$LF_ref < NT$LF_tot/2),] # 298 788 obs
-298788/5574186
+Subsetting our data on MAF>0.2 gave us 2,918,170 SNPs (without the mitochondrial scaffold).
 
-test <-  NT[(NT$LL_ref == 1) & (NT$LF_ref == 0),] # 20 491 obs
+### Combining conditions
+
+With BayPass results, we needed to compute adjusted p-values for C2 statistic:
+
+```
+data$C2_pval <- 1/(10^(data$LOG_C2))
+
+library(stringi)
+library(qvalue)
+
+qobj <- qvalue(p = data$C2_pval)
+lfdr <- qobj$lfdr
+summary(lfdr)
+hist(lfdr, breaks=100)
+
+lfdr_signif_0.2 <- lfdr[lfdr<0.2] # 1,052
 ```
 
+We want to identify SNPs where London Lab carries Harlan reference allele and London Field an alternative allele, with LL_p and LF_p the frequencies of reference allele.
+We also used a threshold of BF > 5, and FST empirical p-values between London Lab and London Field < 0.05:
+
+```
+data$Colour="black"
+data$Colour[(data$BF.dB>5 
+             & data$lfdr_C2<0.2
+             & data$Fst_LLLF_pval<0.05
+             & data$LL_p>data$LF_p)
+            ]="red"
+summary(as.factor(data$Colour))
+```
+
+By doing so, we detected 580 candidates.
+
 ### Synonymous or not
+
+
+
 
 ## Copy Number Variation
 
