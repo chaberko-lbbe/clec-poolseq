@@ -284,7 +284,15 @@ head(PairwiseFST_all@values) # to build Table 2
 
 ### Subsetting data on Minor Allele Frequency
 
+We used the BayPass software to estimate the nucleotide diversity π for each SNP (see [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes) to know how to run BayPass) 
 
+``` 
+pi=read.table("poolfstatdata_220422_bis_summary_pi_xtx.out",header=T)
+result <- merge(pi, contrast, by="MRK")
+result$MAF <- 0.5-abs(result$M_P-0.5)
+summary(result$M_P) # Min 0.02142 - Max 0.97752 
+summary(result$MAF) # Min 0.02142 - Max 0.5
+``` 
 
 
 
