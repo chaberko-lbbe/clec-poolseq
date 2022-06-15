@@ -157,15 +157,23 @@ Two options:
 
 ### Analysing coverage 
 
-We can compute coverage per base (i.e. number of reads mapping at a position of the reference genome)
+We first compute coverage per base (i.e. number of reads mapping at a position of the reference genome):
 
 ```
-/your-path/Tools/Tools/bedtools2/bin/bedtools genomecov -ibam SF_mapped_sorted.bam -d > SF_cov.txt
+/your-path/Tools/Tools/bedtools2/bin/bedtools genomecov -ibam SF_mapped_sorted.bam -d > SF_basecov.txt
 ```
 
 We choose to exclude of our analysis coverage over 50 bp, which corresponds to >95% quantile for all populations, in order to avoid bias due to very high coverage. Coverages computed here were also used for [Copy Number Variation](#Copy-Number-Variation) analysis.
 
+We were then able to compute the coverage (X) for the 4 strains:
 
+```
+awk '{ total += $3 } END { print total/NR }' SF_basecov.txt 
+```
+Coverage LL = 25.0468
+Coverage LF = 32.0371
+Coverage GL = 39.4606
+Coverage SF = 25.3821
 
 ## Overall SNPs analyzes
 
