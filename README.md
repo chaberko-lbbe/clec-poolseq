@@ -510,12 +510,14 @@ In the step 0, the goal is simply to subset strain files on scaffolds.
 
 ### Identify distant and everted read-pairs
 
-The first step identifies read pairs having abnormal orientation and extreme insert size (top 1% distribution) in each population. In a tandem duplication, read pairs that are falling between the two copies will both map on the reference genome in a reversed way (i.e. in opposite direction). For inverted duplication, one of the two paired reads will be in the wrong orientation. 
+The first step identifies read pairs having abnormal orientation and extreme insert size (top 1% distribution) in each population. In a tandem duplication, read pairs that are falling between the two copies will both map on the reference genome in a reversed way (i.e. in opposite direction). For inverted duplication, one of the two paired reads will be in the wrong orientation. You will find the Markdown file dedicated to the detection of the inversions and inverted duplications in the repository (**poolInvertCNV_allscaffolds.Rmd**).
 
 ```{bash}
 mkdir /your-path/PoolSeq_Clec/CNV/step1
 mkdir /your-path/PoolSeq_Clec/CNV/step1/data
 ```
+
+You have to download in step1 directory the following files: **step1_findEvertedInserts.py** and **step1_findDistantInserts**.
 
 To go faster, we can create one script per pool (i.e. per population) using:
 ```{bash}
@@ -636,7 +638,7 @@ LL <- as.data.frame(LL)
 LL <- LL[,c(1:14)]
 write.table(LL, "cNW_019392782.1pLLe_cut.txt", quote=F, sep="\t", row.names=F, col.names=F)
 ```
-
+You have to download in step2and3 directory the following file: **step2and3.R**.
 Then, run the R script with the following modified command:
 
 ```{R}
@@ -654,6 +656,7 @@ mkdir /your-path/PoolSeq_Clec/CNV/step4
 mkdir /your-path/PoolSeq_Clec/CNV/step4/data
 mkdir /your-path/PoolSeq_Clec/CNV/step4/data/comparison1
 ```
+You have to download in step4 directory the following file: **step4_countReadPairsInCNV-KH-pySam.py**.
 
 step4_comp1.sh
 
@@ -1005,6 +1008,7 @@ sort -n -k 7 LL30kb.txt  | awk '{all[NR] = $7} END{print all[int(NR*0.90)]}' > q
 sort -n -k 7 LL30kb.txt  | awk '{all[NR] = $7} END{print all[int(NR*0.10)]}' > q10_30kb
 ```
 
+You have to download in CNV directory the following file: **compute-quantiles-random-windows.R**.
 To do this over all files:
 
 ```{bash}
