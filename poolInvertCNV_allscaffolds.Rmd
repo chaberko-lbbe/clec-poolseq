@@ -1,0 +1,677 @@
+---
+title: "poolInvertCNV_allscaffolds"
+output: html_document
+date: '2022-06-30'
+---
+
+Aim of clustering and analysing tandem duplications and deletions
+(collectively, Copy-Number Variants, CNVs)
+
+
+# Step 0: Subset files on scaffolds
+# Step 1: Identify pair of similar oriented reads (++ or --)
+
+```{bash}
+mkdir /your-path/PoolSeq_Clec/CNV/step1inv
+mkdir /your-path/PoolSeq_Clec/CNV/step1inv/data
+```
+
+To go faster, 1 script per pool (i.e. per population).
+
+step1inv_LL.sh
+
+```{bash}
+#!/bin/bash
+#SBATCH --cpus-per-task=1
+#SBATCH --mem 1G
+#SBATCH -t 24:00:00
+#SBATCH -e /your-path/PoolSeq_Clec/CNV/step1inv_LL.err
+#SBATCH -o /your-path/PoolSeq_Clec/CNV/step1inv_LL.out
+#SBATCH -J Genome_Cimex_lectularius
+
+cd /your-path/PoolSeq_Clec/CNV/
+
+function step1inv(){
+
+    chr=$1
+    pool=$2
+
+    ficBam=/your-path/PoolSeq_Clec/CNV/step1inv/${pool}_${chr}_mapped.bam
+
+    /your-path/Tools/samtools-1.10/bin/samtools view --threads 8 $ficBam | awk 'function abs(x){return ((x < 0.0) ? -x : x)}{if (abs($9) < 2000 && $5>=20) print abs($9)}' > /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt # Extract the insert size distribution ; replace awk '{ if ($5 >= 20 && $9 <= 2000) print $9 }'
+
+    sort -n /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt  | awk '{all[NR] = $0} END{print all[int(NR*0.99 - 0.01)]}' > /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr$chr/ISIZE99_c${chr}p${pool}.txt # Compute the  the  99th percentile of the insert size distribution
+
+    insertSizeCutoff=$(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr$chr/ISIZE99_c${chr}p${pool}.txt) # Define the variable insertSizeCutoff
+
+    /your-path/Tools/samtools-1.10/bin/samtools flagstat $ficBam | sed '9q;d'| cut -d ' ' -f 1 | cat > /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr$chr/d${pool}_c${chr}.txt 
+    # Save read depth information for later calculation of normConst ; 9q;d replaced by 7q;d ??
+
+    /your-path/Tools/samtools-1.10/bin/samtools view $ficBam | python /your-path/PoolSeq_Clec/CNV/step1inv/step1_findInvertedInserts.py > /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr$chr/c${chr}p${pool}inv.txt # Identify inverted reads
+    
+    awk '{delta = $1 - avg; avg += delta / NR; mean2 += delta * ($1 - avg); } END { print sqrt(mean2 / NR); }' /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt  > /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr$chr/SD_ISIZE_c${chr}p${pool}.txt # calculate SD of insert size
+
+    rm -rf $ficBam
+}
+
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds)
+do
+  mkdir /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr$chr
+  cd /your-path/PoolSeq_Clec/CNV/step1inv/ # create subset bam file here
+
+for pool in $(cat /your-path/PoolSeq_Clec/CNV/list_pops) # iterate across all pools
+  do
+
+     /your-path/Tools/samtools-1.10/bin/samtools view -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/${pool}_mapped_sorted.bam "${chr}" > ${pool}_${chr}_mapped.bam
+
+     step1inv $chr $pool
+
+  done
+  cd ..
+done
+```
+
+
+```{python}
+import sys,os
+
+def getReadEndpoint(start,mapinfo):
+    currnum = ""
+    totallen = 0
+    for char in mapinfo:
+        if char.isdigit():
+            currnum += char
+        else:
+            currnum = int(currnum)
+            if char == "D":
+                totallen += currnum
+            elif char == "I":
+                pass
+            elif char == "M":
+                totallen += currnum
+            elif char in ["S", "H"]:
+                pass
+            else:
+                raise Exception
+            currnum = ""
+    return start+totallen-1
+
+line = sys.stdin.readline()
+readh = {}
+headers = ["@HD", "@PG", "@RG", "@SQ"]
+while line:
+    if not line[:3] in headers:
+        line = line.strip().split("\t")
+        read,flag,c,pos1,mapqual,mapinfo,c2,pos2,isize,reads,quals = line[:11]
+        mapqual = int(mapqual)
+        isize = int(isize)
+        intFlag = int(flag)
+        flag = bin(intFlag)
+        #the read is paired, primary, and passes qual checks and is not a PCR/optical duplicate
+        if flag[-1] == "1" and intFlag <= 512:
+            #make sure both reads are mapped
+            if flag[-3] == "0" and flag[-4] == "0":
+                pos1 = int(pos1)
+                pos2 = int(pos2)
+                if flag[-5] == "0":
+                    strand = "+"
+                else:
+                    strand = "-"
+                if flag[-6] == "0":
+                    strand2 = "+"
+                else:
+                    strand2 = "-"
+                if (c2 == "=" and pos1 < pos2) and (strand2+strand == "--" or strand2+strand == "++"): # SMALL MODIF HERE
+                    if not readh.has_key(read):
+                        readh[read] = ["",""]
+                    s = pos1
+                    e = getReadEndpoint(s,mapinfo)
+                    if readh[read][0] != "":
+                        print read, flag, intFlag
+                        raise Exception
+                    readh[read][0] = (c,s,e,strand,mapqual,reads,quals)
+                elif (c2 == "=" and pos2 < pos1) and (strand2+strand == "--" or strand2+strand == "++"): # SMALL MODIF HERE
+                    #same chromosome and this one is on the right
+                    if not readh.has_key(read):
+                        readh[read] = ["",""]
+                    s = pos1
+                    e = getReadEndpoint(s,mapinfo)
+                    if readh[read][1] != "":
+                        raise Exception
+                    readh[read][1] = (c,s,e,strand,mapqual,reads,quals)
+                if readh.has_key(read) and readh[read][0] != "" and readh[read][1] != "":
+                    lcoords,rcoords = readh[read]
+                    c1,ls,le,strand1,mapqual1,reads1,quals1 = lcoords
+                    c2,rs,re,strand2,mapqual2,reads2,quals2 = rcoords
+                    if c1 != c2:
+                        raise Exception
+                    if rs < ls:
+                        print read,lcoords,rcoords
+                        raise Exception
+                    span = (rs - le) - 1
+                    strands = strand1+strand2
+                    if strands == "++" or strands == "--" : # SMALL MODIF HERE
+                        print "\t".join([str(x) for x in [read,c1,ls,le,strand1,mapqual1,reads1,quals1,rs,re,strand2,mapqual2,reads2,quals2]])
+                        del readh[read]
+    line = sys.stdin.readline()
+```
+
+
+# Step 2 & 3 : Custom script !!
+
+Step 2: Cluster similar oriented read-pairs within pools to identify inverted duplications
+Step 3: Match corresponding CNVs between pools and calculate the normalized number of supporting read-pairs in each pool
+
+```{bash}
+mkdir /your-path/PoolSeq_Clec/CNV/step2and3
+mkdir /your-path/PoolSeq_Clec/CNV/step2and3/data
+mkdir /your-path/PoolSeq_Clec/CNV/step2and3/data/comparison1
+mkdir /your-path/PoolSeq_Clec/CNV/step2and3/data/comparison2
+mkdir /your-path/PoolSeq_Clec/CNV/step2and3/data/comparison3
+mkdir /your-path/PoolSeq_Clec/CNV/step2and3/data/comparison4
+mkdir /your-path/PoolSeq_Clec/CNV/step2and3/data/comparison5
+mkdir /your-path/PoolSeq_Clec/CNV/step2and3/data/comparison6
+```
+
+```{bash}
+#!/bin/bash
+#SBATCH --cpus-per-task=1
+#SBATCH --mem 1G
+#SBATCH -t 24:00:00
+#SBATCH -e /your-path/PoolSeq_Clec/CNV/step2and3.err
+#SBATCH -o /your-path/PoolSeq_Clec/CNV/step2and3.out
+#SBATCH -J Genome_Cimex_lectularius
+
+function step2and3() {
+
+# Input parameters: chromosome and comparison
+chr=$1
+comparison=$2
+
+# Pools A and B and defined by the comparison.
+# e.g., comparison 1 compairs pools LL and LF.
+# -eq = "est égal à"
+
+if [[ ${comparison} -eq 1 ]]; then # Focal comparison 1
+  poolA=LL
+  poolB=LF
+elif [[ ${comparison} -eq 2 ]]; then # Control comparison 1
+  poolA=LL
+  poolB=GL 
+elif [[ ${comparison} -eq 3 ]]; then # Focal comparison 2
+  poolA=LL
+  poolB=SF
+elif [[ ${comparison} -eq 4 ]]; then # Control comparison 2
+  poolA=LF
+  poolB=SF
+elif [[ ${comparison} -eq 5 ]]; then
+  poolA=GL
+  poolB=LF
+elif [[ ${comparison} -eq 6 ]]; then
+  poolA=GL
+  poolB=SF
+fi
+
+# Calculate the normalization constant.
+# dA and dB are calculated in step 1
+dA=$(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/d${poolA}_c${chr}.txt) # Pool A = pool 1; specify d1_Chr${chr}
+dB=$(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/d${poolB}_c${chr}.txt) # Pool B = pool 2; specify d2_Chr${chr}
+A_B=$(echo $dA+$dB | bc)
+mean=$(echo $A_B/2 | bc)
+normA=$(printf %.2f $(echo "$mean/$dA" | bc -l)) # modified to avoid rounded number 
+normB=$(printf %.2f $(echo "$mean/$dB" | bc -l))
+
+normConstA=$normA
+normConstB=$normB
+
+echo $(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/SD_ISIZE_c${chr}p${poolA}.txt)*4 | bc > /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/insertSizeDiffCutoff_c${chr}p${poolA}.txt
+
+insertSizeDiffCutoff_popA=$(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/insertSizeDiffCutoff_c${chr}p${poolA}.txt)
+
+echo $(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/SD_ISIZE_c${chr}p${poolB}.txt)*4 | bc > /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/insertSizeDiffCutoff_c${chr}p${poolB}.txt
+
+insertSizeDiffCutoff_popB=$(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/insertSizeDiffCutoff_c${chr}p${poolB}.txt)
+
+echo $(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/insertSizeDiffCutoff_c${chr}p${poolA}.txt)+$(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/insertSizeDiffCutoff_c${chr}p${poolB}.txt) | bc > /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/distanceCutoff_c${chr}p${poolA}vs${poolB}.txt
+
+distanceCutoff=$(cat /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/distanceCutoff_c${chr}p${poolA}vs${poolB}.txt)
+
+# The famous Rscript
+
+/your-path/Tools/R-4.0.5/bin/Rscript /your-path/PoolSeq_Clec/CNV/step2and3/step2and3.R /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/c${chr}p${poolA}inv.txt /your-path/PoolSeq_Clec/CNV/step1inv/data/Chr${chr}/c${chr}p${poolB}inv.txt $normConstA $normConstB $insertSizeDiffCutoff_popA $insertSizeDiffCutoff_popB $distanceCutoff /your-path/PoolSeq_Clec/CNV/step2and3/data/comparison${comparison}/c${chr}P${poolA}_inverted_cluster.tsv /your-path/PoolSeq_Clec/CNV/step2and3/data/comparison${comparison}/c${chr}P${poolB}_inverted_cluster.tsv /your-path/PoolSeq_Clec/CNV/step2and3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_inverted.tsv
+
+}
+
+# Iterate over pools and chromosomes
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds) 
+do
+  for comparison in 1 # comparison 1 to 6 in this case
+  do
+    step2and3 $chr $comparison
+  done
+done
+```
+
+Output file contains:
+- The coordinates of the cluster, comma-separated.
+- The coordinates of the cluster found in pool 1 ("NA" if the cluster was only found in pool 2)
+- The (corrected) *number of read pairs supporting the event in pool 1* (0 if only found in pool 2)
+- The coordinates found in pool 2 ("NA" if the cluster was only found in pool 1)
+- The (corrected) *number of read pairs supporting the event in pool 2* (0 if only found in pool 1)
+
+# Step 4: Calculate relative read depth differences
+
+Blast Petersen's mapping of TE on the most recent genome version > see Blast-TE.Rmd
+We need to use a masked file with repeated regions per chr:
+
+```{bash}
+# Split bed file per scaffold:
+input=blast-TE.bed
+for chr in `cut -f 1 $input | sort | uniq`;
+do
+	echo $chr
+	grep -w $chr $input > /your-path/PoolSeq_Clec/CNV/bed_files/Cimex_lectularius_TE_Chr$chr.bed
+done
+
+# And sort it:
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds)
+do
+/your-path/Tools/bedtools2/bin/bedtools sort -i /your-path/PoolSeq_Clec/CNV/bed_files/Cimex_lectularius_TE_Chr${chr}.bed > /your-path/PoolSeq_Clec/CNV/bed_files/Cimex_lectularius_TE_Chr${chr}_sorted.bed
+done
+```
+
+step4inv_comp1.sh
+
+```{bash}
+mkdir /your-path/PoolSeq_Clec/CNV/step4inv
+mkdir /your-path/PoolSeq_Clec/CNV/step4inv/data
+mkdir /your-path/PoolSeq_Clec/CNV/step4inv/data/comparison
+```
+
+```{bash}
+#!/bin/bash
+#SBATCH --cpus-per-task=1
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /your-path/PoolSeq_Clec/CNV/step4inv_comp1.err
+#SBATCH -o /your-path/PoolSeq_Clec/CNV/step4inv_comp1.out
+#SBATCH -J Genome_Cimex_lectularius
+
+#Implement step4inv for comparisons 10 and 11 (the two control comparisons)
+
+function step4inv() {
+chr=$1
+comparison=$2
+
+# Read in the masked-regions file for the relevant chromosome (e.g repeats) // "none" without
+MaskedRegionsFile=/your-path/PoolSeq_Clec/CNV/bed_files/Cimex_lectularius_TE_Chr${chr}.bed
+
+# Define comparisons
+if [[ ${comparison} -eq 1 ]]; then # Focal comparison 1
+  poolA=LL
+  poolB=LF
+elif [[ ${comparison} -eq 2 ]]; then # Control comparison 1
+  poolA=LL
+  poolB=GL 
+elif [[ ${comparison} -eq 3 ]]; then # Focal comparison 2
+  poolA=LL
+  poolB=SF
+elif [[ ${comparison} -eq 4 ]]; then # Control comparison 2
+  poolA=LF
+  poolB=SF
+elif [[ ${comparison} -eq 5 ]]; then
+  poolA=GL
+  poolB=LF
+elif [[ ${comparison} -eq 6 ]]; then
+  poolA=GL
+  poolB=SF
+# 10 = also control comparison 1
+# 11 = also control comparison 2
+fi
+
+# Read in the relevant .bam file
+ficBamA=/your-path/PoolSeq_Clec/CNV/step4inv/${poolA}_${chr}_mapped.bam
+ficBamB=/your-path/PoolSeq_Clec/CNV/step4inv/${poolB}_${chr}_mapped.bam
+
+# inversed read-pair clusters only
+python2 /your-path/PoolSeq_Clec/CNV/step4inv/step4inv_countReadPairsInCNV-KH-pySam.py \
+/your-path/PoolSeq_Clec/CNV/step2and3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_inverted.tsv \
+  $ficBamA $MaskedRegionsFile > /your-path/PoolSeq_Clec/CNV/step4inv/data/comparison${comparison}/c${chr}_Aonly_inverted.tsv # this is an intermediate file
+
+python2 /your-path/PoolSeq_Clec/CNV/step4inv/step4inv_countReadPairsInCNV-KH-pySam.py \
+/your-path/PoolSeq_Clec/CNV/step4inv/data/comparison${comparison}/c${chr}_Aonly_inverted.tsv \
+  $ficBamB $MaskedRegionsFile  > /your-path/PoolSeq_Clec/CNV/step4inv/data/comparison${comparison}/c${chr}_P${poolA}vsP${poolB}d_comp${comparison}_inverted.tsv
+
+# remove the relevant data at the end of this part of the loop
+rm -f   $ficBamA
+rm -f   $ficBamB
+rm -f   /your-path/PoolSeq_Clec/CNV/step4inv/*mapped.bam.bai
+
+}
+# comparison 1 (Our focal comparison 1), for example
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds)
+do
+  for comparison in 1 # only comparison 1 here
+  do
+    /your-path/Tools/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LL_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/step4inv/LL_${chr}_mapped.bam
+    
+    /your-path/Tools/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/step4inv/LL_${chr}_mapped.bam
+
+    /your-path/Tools/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LF_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/step4inv/LF_${chr}_mapped.bam
+    
+    /your-path/Tools/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/step4inv/LF_${chr}_mapped.bam
+
+    step4inv $chr $comparison
+  done
+done
+```
+
+# Step 4.5: Append additional allele frequency information to each duplication and deletion event
+
+We kept the same comparison name as in step4 > so we replace "altname" with "comparison" in for example "~/step4inv/data/comparison${altname}/c${chr}_P${poolA}vsP${poolB}d_comp${altname}_distant.tsv"
+
+So first, we want to compute upper 95% threshold and lower 5% threshold for the expected difference in
+read depth, based on empirical sampling of the data:
+
+We can keep the threshold defined for everted and distant read pairs:
+
+```{bash}
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5inv
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5inv/data
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5inv/data/comparison1
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5inv/data/RDR_95/
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5inv/data/RDR_95/C1
+
+cp /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C1/Lo5_allChr_C1.tsv /your-path/PoolSeq_Clec/CNV/step4pt5inv/data/RDR_95/C1/Lo5_allChr_C1.tsv
+
+cp /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C1/Up95_allChr_C1.tsv /your-path/PoolSeq_Clec/CNV/step4pt5inv/data/RDR_95/C1/Up95_allChr_C1.tsv
+
+cp /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C1/Lo10_allChr_C1.tsv /your-path/PoolSeq_Clec/CNV/step4pt5inv/data/RDR_95/C1/Lo10_allChr_C1.tsv
+
+cp /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C1/Up90_allChr_C1.tsv /your-path/PoolSeq_Clec/CNV/step4pt5inv/data/RDR_95/C1/Up90_allChr_C1.tsv
+```
+
+We also added the line in the code about MNSI which was missing.
+
+```{bash}
+#!/bin/bash
+#SBATCH --cpus-per-task=1
+#SBATCH --mem 1G
+#SBATCH -t 10:00:00
+#SBATCH -e /your-path/PoolSeq_Clec/CNV/step4pt5inv_comp1.err
+#SBATCH -o /your-path/PoolSeq_Clec/CNV/step4pt5inv_comp1.out
+#SBATCH -J Genome_Cimex_lectularius
+
+function step4pt5inv(){
+
+    chr=$1
+    comparison=$2
+
+    # Define the pools relevant to the specified comparison
+
+    if [[ ${comparison} -eq 1 ]]; then # Focal comparison 1
+        poolA=LL
+        poolB=LF
+    elif [[ ${comparison} -eq 2 ]]; then # Control comparison 1
+        poolA=LL
+        poolB=GL
+    elif [[ ${comparison} -eq 3 ]]; then # Focal comparison 2
+        poolA=LL
+        poolB=SF
+    elif [[ ${comparison} -eq 4 ]]; then # Control comparison 2
+        poolA=LF
+        poolB=SF
+    elif [[ ${comparison} -eq 5 ]]; then
+        poolA=GL
+        poolB=LF
+    elif [[ ${comparison} -eq 6 ]]; then
+        poolA=GL
+        poolB=SF
+    fi
+
+    ### INVERTED READS (DUPLICATIONS)
+
+    ## Assign size window categories to each CNV
+
+    cut -f7 /your-path/PoolSeq_Clec/CNV/step4inv/data/comparison${comparison}/c${chr}_P${poolA}vsP${poolB}d_comp${comparison}_inverted.tsv | awk -F $'\t' 'BEGIN {OFS = FS} \
+     {if ($1 < 750) print "500"; \
+     else if ($1 >= 750 && $1 < 1500) print "1000"; \
+     else if ($1 >= 1500 && $1 < 3500) print "2000"; \
+     else if ($1 >= 3500 && $1 < 6500) print "5000"; \
+     else if ($1 >= 6500 && $1 < 9000) print "8000";\
+     else if ($1 >= 9000 && $1 < 15000) print "10000";\
+     else if ($1 >= 15000 && $1 < 25000) print "20000";\
+     else if ($1 >= 25000 && $1 < 35000) print "30000";\
+     else if ($1 >= 35000 && $1 < 45000) print "40000";\
+     else if ($1 >= 45000 && $1 < 75000) print "50000";\
+     else if ($1 >= 75000 && $1 < 300000) print "100000";\
+     else if ($1 >= 300000 && $1 < 750000) print "500000";\
+     else if ($1 >= 750000 && $1 < 1250000) print "1000000";\
+     else if ($1 >= 1250000 && $1 < 1750000) print "1500000";\
+     else if ($1 >= 1750000 && $1 < 2250000) print "2000000";\
+     else if ($1 >= 2250000) print "2500000"}' > windowSizes_Chr${chr}_Pools${poolA}vs${poolB}_e.tsv
+
+    ## Append the 10th field with window category information
+    paste /your-path/PoolSeq_Clec/CNV/step4inv/data/comparison${comparison}/c${chr}_P${poolA}vsP${poolB}d_comp${comparison}_inverted.tsv \
+    windowSizes_Chr${chr}_Pools${poolA}vs${poolB}_e.tsv > S4_Window_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    ## Append the 11th field with the difference in number of supporting inserts (DiffSuppIns):
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {print $3-$5 }' S4_Window_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > DSI_e.tsv
+    paste S4_Window_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv DSI_e.tsv > S4_DSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+     ## Calculate the read depth ratio and append the 12th field with this value
+
+    # calculate the per-nucleotide read depth in pool A if the CNV was present in A
+    awk -F $'\t' 'BEGIN {OFS = FS}{Wsize=$7; depth=$6; if ($7 != 0) print (depth/Wsize)*100 ; else if ($7 == 0) print "0"}' S4_DSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv  > PerNtDepthA_e.tsv
+    # calculate the per-nucleotide read depth in pool B if the CNV was present in B
+    awk -F $'\t' 'BEGIN {OFS = FS}{Wsize=$7; depth=$8; if ($7 != 0) print (depth/Wsize)*100 ; else if ($7 == 0) print "0"}' S4_DSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv  > PerNtDepthB_e.tsv
+    paste PerNtDepthA_e.tsv PerNtDepthB_e.tsv > ObsDepth_e.tsv
+    awk -F $'\t' 'BEGIN {OFS = FS}{if ($2 != 0) print $1/$2; else if ($2 == 0) print "inf" }' ObsDepth_e.tsv > ObsRDR_e.tsv
+    paste S4_DSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv ObsRDR_e.tsv > S4_ObsRDR_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    ## Assign a status (qualitative difference or quantitative difference) to each CNV and apppend the 13th field with this status
+    awk -F $'\t' 'BEGIN {OFS = FS}{if ($2 != "NA" && $4 != "NA") print "Quantitative"; else if ($2 = "NA" || $4 = "NA") print "Qualitative"}' \
+    S4_ObsRDR_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > QQ_e.tsv
+    paste S4_ObsRDR_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv QQ_e.tsv > S4_QQ_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    # Qualitative/Quantitative status is now the 13th field
+
+# For clusters of inverted reads, identify those which have at least 3 supporting reads  (MNSI>3) and append the 14th field with this status
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($2 != "NA" && $4 != "NA" && ($3 <= 3 || $5 <= 3)) print "F"; \
+    else if ($2 != "NA" && $4 != "NA" && ($3 >= 3 || $5 >= 3)) print "T"; \
+    else if ($2 != "NA" && $3 <= 3) print "F";\
+    else if ($2 != "NA" && $3 >= 3) print "T"; \
+    else if ($4 != "NA" && $5 <= 3) print "F";\
+    else if ($4 != "NA" && $5 >= 3) print "T"}' S4_QQ_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > MNSI_inverted.tsv
+    paste S4_QQ_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv MNSI_inverted.tsv > S4_MNSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    ## Read in the upper 95% read depth ratio threshold and assign this value to the 15th field
+
+    infile="S4_MNSI_inverted_Chr"${chr}"_Pools"${poolA}"vs"${poolB}".tsv"
+    outfile="S4_MNSI_inverted_Chr"${chr}"_Pools"${poolA}"vs"${poolB}"_Upper.tsv"
+    thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5inv/data/RDR_95/C"${comparison}"/Up90_allChr_C"${comparison}".tsv"
+    
+    awk -v outf=$outfile -F $'\t' 'BEGIN {OFS = FS}  { if (NR == FNR ) {d[$1]=$2}
+    else {
+    print $0, d[$10] > outf
+    }}
+    ' $thresholdsfile $infile
+
+    # 16th field is lower threshold
+
+    infile="S4_MNSI_inverted_Chr"${chr}"_Pools"${poolA}"vs"${poolB}"_Upper.tsv"
+    outfile="S4_MNSI_inverted_Chr"${chr}"_Pools"${poolA}"vs"${poolB}"_Lower.tsv"
+    thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5inv/data/RDR_95/C"${comparison}"/Lo10_allChr_C"${comparison}".tsv"
+
+    awk -v outf=$outfile -F $'\t' 'BEGIN {OFS = FS} { if (NR == FNR ) {d[$1]=$2}
+    else {
+    print $0, d[$10] > outf
+    }}
+    ' $thresholdsfile $infile
+
+    # 17th field labels inverted reads
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($14 == "T" || $14 == "F") print "inverted"}' S4_MNSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}_Lower.tsv > INVERTED.tsv
+    paste S4_MNSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}_Lower.tsv INVERTED.tsv > S4_labeled_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+
+    # 18th field labels legitimate tandem duplications that belong to a specific pool (DUP_INV, for inverted reads) and false positives (FP)
+
+    # 18th field labels legitimate tandem duplications (DUP_INV) in to a specific pool (A or B) and false positives (FP).
+    # FPs are generated when the DiffSuppIns value is not in the same 'direction' as the read depth ratio.
+    # If there is a duplication in pool A, there should be more inverted read
+    # pairs in A compared to B and a higher read depth in A compared to B (and vice versa for b).
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($11 > 0 && $12 > 1) print "DUP_INV_A"; \
+    else if ($11 < 0 && $12 < 1) print "DUP_INV_B"; \
+    else print "FP"}' S4_labeled_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > S4_CNVAB_e.txt
+
+    paste S4_labeled_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv S4_CNVAB_e.txt > S4_CNVAB_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    # 19th field labels legitimate tandem duplications in general
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($18 == "DUP_INV_A" || $18 == "DUP_INV_B") print "DUP_INV"; else print "FP"}' S4_CNVAB_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > DUP_FP.tsv
+    paste S4_CNVAB_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv DUP_FP.tsv > S4_appended_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    # remove intermediate files
+
+    rm -rf windowSizes_Chr${chr}_Pools${poolA}vs${poolB}_e.tsv
+    rm -rf S4_Window_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf DSI_e.tsv
+    rm -rf S4_DSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf PerNtDepthA_e.tsv
+    rm -rf PerNtDepthB_e.tsv
+    rm -rf ObsDepth_e.tsv
+    rm -rf ObsRDR_e.tsv
+    rm -rf INVERTED.tsv
+    rm -rf S4_ObsRDR_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf UpThreshold99.tsv
+    rm -rf UpThreshold99.tsv
+    rm -rf MNSI_inverted.tsv
+    rm -rf QQ_e.tsv
+    rm -rf S4_QQ_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_MNSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_MNSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}_Upper.tsv
+    rm -rf S4_MNSI_inverted_Chr${chr}_Pools${poolA}vs${poolB}_Lower.tsv
+    rm -rf S4_labeled_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_CNVAB_e.txt
+    rm -rf S4_CNVAB_inverted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf DUP_FP.tsv
+}
+
+## focal comparisons
+# comparison 1
+cd /your-path/PoolSeq_Clec/CNV/step4pt5inv/data/comparison1
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds)
+do
+ step4pt5inv $chr 1
+done
+cat S4_appended_inverted_Chr*.tsv > S4_inverted_c1.tsv # collate all DUP output
+```
+
+
+awk: cmd. line:1: (FILENAME=S4_DSI_inverted_ChrNW_019392645.1_PoolsLLvsLF.tsv FNR=17) fatal: division by zero attempted
+ > related to masked file probably
+
+awk: cmd. line:1: fatal: cannot open file `S4_MNSI_inverted_ChrNW_019392777.1_PoolsLLvsLF_Upper.tsv' for reading (No such file or directory)
+awk: cmd. line:1: fatal: cannot open file `S4_MNSI_inverted_ChrNW_019392777.1_PoolsLLvsLF_Lower.tsv' for reading (No such file or directory)
+paste: S4_MNSI_inverted_ChrNW_019392777.1_PoolsLLvsLF_Lower.tsv: No such file or directory
+> because of empty files
+	
+Download inverted file before doing some analyzes on R:
+
+```{r}
+dup_inv <- read.table(file="S4_inverted_c1.tsv", fill=T) # 9 315
+
+colnames(dup_inv) <- c("Coords","CoordsPool1","NormReadsPool1","CoordsPool2","NormReadsPool2","ReadDepthPool1","SizePool1","ReadDepthPool2","SizePool2","SizeClass","DiffSuppIns","ReadDepthRatio","Status","MNSI","UpperThreshold","LowerThreshold","Type","TypeDup","extra")
+
+dup_inv$TypeDup <- as.factor(dup_inv$TypeDup)
+summary(dup_inv$TypeDup)
+
+# We filter out mitochondrial genome
+# Split dups' first column
+library(stringr)
+dup_inv[c('scaffold', 'start_event', 'end_event')] <- str_split_fixed(dup_inv$Coords, ',', 3)
+dup_inv <- dup_inv[dup_inv$scaffold != "NC_030043.1",] # 9 301
+
+# We filter out small events (<= 5 kb)
+
+dup_inv <- dup_inv[dup_inv$SizeClass >= 5000,] # 5 122
+summary(dup_inv$TypeDup)
+# DUP_INV_A DUP_INV_B FP 
+# 13        2871      2238 
+
+# Find whether some events fall within genes
+
+library(xlsx)
+merge_gff <- read.xlsx(file="~/Desktop/merge_gff.xlsx", sheetName = "Sheet1")
+annot_R <- read.xlsx2(file="~/Desktop/Annotation genes JP/annotation_bedbug_221121.xls",
+                      sheetName = "insecticide_resistance_100122")
+View(merge_gff)
+merge_gff <- merge(merge_gff, annot_R[,c(1,7)], by="Name", all.x=T)
+
+# dup_inv or dup_inv_clean
+final_dup_inv <- merge(dup_inv, merge_gff, by.x="scaffold", by.y="seqid") # 23 149
+colnames(final_dup_inv)[24] <- "start_gene"
+colnames(final_dup_inv)[25] <- "end_gene"
+
+final_dup_inv$start_event <- as.numeric(as.character(final_dup_inv$start_event))
+final_dup_inv$end_event <- as.numeric(as.character(final_dup_inv$end_event))
+
+# Then, we want to select lines where genes and events are overlapping
+
+sub_inv_dup <- final_dup_inv[(final_dup_inv$start_event-1000 < final_dup_inv$start_gene &
+                                final_dup_inv$end_event+1000 > final_dup_inv$end_gene),] # upd 9 246 events in genes
+length(unique(sub_inv_dup$Name)) # upd 4 845 genes
+View(sub_inv_dup)
+
+summary(sub_inv_dup$TypeDup) # 282 DUP_INV_B, 5 DUP_INV_A, 0 FP
+
+# And only on LF > LL
+
+sub_inv_dup <- sub_inv_dup[sub_inv_dup$TypeDup=="DUP_INV_B" ,] # 282 events with DUP in LF > LL in genes 
+length(unique(sub_inv_dup$Name)) # 232 genes with DUP in LF > LL
+
+sub_inv_dup$sizeGene <- sub_inv_dup$end_gene - sub_inv_dup$start_gene
+sub_inv_dup$percentSize <- sub_inv_dup$sizeGene/sub_inv_dup$SizePool1*100
+View(sub_inv_dup)
+
+# Only inside resistance genes
+
+resist_dup_inv <- sub_inv_dup[!is.na(sub_inv_dup$category),]# 36 events with DUP in LF > LL in resistance genes 
+length(unique(resist_dup_inv$Name)) # 23 genes with DUP in LF > LL
+
+resist_dup_inv_sub <- resist_dup_inv[resist_dup_inv$ReadDepthRatio < resist_dup_inv$LowerThreshold,]
+
+
+View(resist_dup_inv_sub)
+
+write.xlsx(resist_dup_inv, file="~/Desktop/CloudStation/THESE/WholeGenome PoolSeq/CNV/dup_inv_resist_final.xls", 
+           row.names = F)
+
+# Do we have events that cover an entire chr ?
+
+library(ape)
+gtffile <- file.path("~/Desktop/CloudStation/THESE/DataCluster/Genomes_Annotations/GCF_000648675.2_Clec_2.1_genomic.gff") 
+gff=read.gff(gtffile)
+
+gff <- gff[gff$source=="RefSeq" & gff$type=="region",]
+gff <- gff[,c(1,4,5)]
+
+dup_save <- merge(dup_inv, gff[,c(1,3)], by.x="scaffold", by.y="seqid", all.y=F)
+colnames(dup_save)[23] <- "size_scaff"
+
+dup_save$percentSizeScaff <- dup_save$SizePool1/dup_save$size_scaff*100
+#dup_save <- dup_save[dup_save$TypeDup == "DUP_INV_B" | dup_save$TypeDup == "DUP_B",]
+
+dup_save <- dup_save[dup_save$percentSizeScaff > 50,]
+
+View(dup_save)
+length(unique(dup_save$scaffold)) # for dup inv, 70 scaff ont event > 50% taille !
+
+dup_save <- dup_save[dup_save$percentSizeScaff > 90,]
+length(unique(dup_save$scaffold)) # for dup inv, 0 scaff ont event > 90% taille !
+
+```
+
+ 
