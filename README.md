@@ -30,8 +30,11 @@ Contact: chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 
  - **[Detection of structural variants](#Detection-of-structural-variants)**
  	- [Subset files on scaffolds](#Subset-files-on-scaffolds)
-	- [Selecting amplified genes](#Selecting-amplified-genes)
-
+	- [Identify distant and everted read-pairs](#Identify-distant-and-everted-read-pairs)
+	- [Cluster distant and everted read-pairs within pools](#Cluster-distant-and-everted-read-pairs-within-pools)
+	- [Calculate relative read depth differences](#Calculate-relative-read-depth-differences)
+	- [Identify distant and everted read-pairs](#Identify-distant-and-everted-read-pairs)
+	- [Append additional allele frequency information](#Append-additional-allele-frequency-information)
 
 
 ## Installing tools
@@ -497,12 +500,17 @@ By doing so, we detected 580 candidates.
 
 ## Detection of structural variants
 
-Aim of clustering and analysing tandem duplications and deletions
-(collectively, Copy-Number Variants, CNVs)
+We aim to detect two types of structural variants (SVs), duplications and inversions. London Field population was compared to the susceptible reference genome, and to the susceptible London Lab population, in order to detect SVs that could have been selected and underlie the resistance phenotype.
+The presence of SVs was inferred based on abnormal read pair orientation and/or distance (insert size), and read depth variation. We used poolCNVcomp (North et al., 2020; Schrider et al., 2013; Schrider et al., 2016), a series of scripts designed for the detection of tandem duplications in pool-seq data, and adapted them to detect inverted duplications and simple inversions as well. 
+Associated python scripts can also be downloaded here: https://gitlab.mbb.univ-montp2.fr/khalid/poolcnvcomp/-/tree/master
 
-### Step 0: Subset files on scaffolds
+### Subset files on scaffolds
 
-### Step 1: Identify distant and everted read-pairs
+In the step 0, the goal is simply to subset strain files on scaffolds.
+
+### Identify distant and everted read-pairs
+
+The step 1 aime to identify distant and everted read-pairs
 
 ```{bash}
 mkdir /your-path/PoolSeq_Clec/CNV/step1
@@ -510,7 +518,9 @@ mkdir /your-path/PoolSeq_Clec/CNV/step1/data
 ```
 
 To go faster, we can create one script per pool (i.e. per population) using:
-> nano step0and1_LL.sh
+```{bash}
+nano step0and1_LL.sh
+```
 
 ```{bash}
 #!/bin/bash
@@ -576,7 +586,6 @@ for pool in LL # iterate across all pools
   cd ..
 done
 ```
-
 
 ### Step 2 & 3: Cluster distant and everted read-pairs within pools to identify deletions and tandem duplications
 
