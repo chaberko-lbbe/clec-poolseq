@@ -29,7 +29,7 @@ Contact: chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 	- [Synonymous or not](#Synonymous-or-not)
 
  - **[Detection of structural variants](#Detection-of-structural-variants)**
- 	- [Step 0: Subset files on scaffolds](#Step-0:-Subset-files-on-scaffolds)
+ 	- [Subset files on scaffolds](#Subset-files-on-scaffolds)
 	- [Selecting amplified genes](#Selecting-amplified-genes)
 
 
