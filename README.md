@@ -36,7 +36,7 @@ Contact: chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 
 ## Installing tools
 
-Here are the tools and versions used (on a cluster): 
+Here are the tools and versions used (on a computing cluster): 
 - FastQC 
 - Trimmomatic v0.39
 - FastUniq v1.1
