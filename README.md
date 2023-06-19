@@ -49,18 +49,22 @@ They will be store in /your-path/Tools.
 We also used R on a computer with packages poolfstat v2.0.0, pcadapt v4.3.3, VariantAnnotation v1.34.0, and GenomicFeatures v1.40.1.
 
 
-
-
 ## Pool-seq data processing
 
 The goal is first to map *Cimex lectularius* PoolSeq samples (London Lab, London Field, German Lab and Sweden Field - pools of 30 individuals) on reference genome.
 
 ### Getting the data
 
-Raw sequences (fastq.gz files) are available on SRA: xx
+Raw sequences (fastq.gz files) are available on SRA under the accession number PRJNA826750:
+- London Lab (LL): SRX15014458
+- London Field (LF): SRX15014459
+- German Lab (GL): SRX15014460
+- Sweden Field (SF): SRX15014461
+
 ```
 mkdir /your-path/PoolSeq_Clec/Raw_Clec
 ```
+Please keep in mind that the following step should be performed for each strains, but will be presented for only one for the sake of brevity.
 
 We used the recent reference genome and annotation, avalaible here: https://www.ncbi.nlm.nih.gov/assembly/GCF_000648675.2
 ```
