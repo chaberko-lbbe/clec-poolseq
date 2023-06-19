@@ -1,6 +1,7 @@
 ![Image 1](bedbugs.png)
 
 You can learn more about the context of this repository in the article from which it stems: https://onlinelibrary.wiley.com/doi/full/10.1111/eva.13550
+
 Contact: chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 
 ## Table of Contents
