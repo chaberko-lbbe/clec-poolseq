@@ -29,7 +29,6 @@ Contact: chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 	- [Synonymous or not](#Synonymous-or-not)
 
  - **[Detection of structural variants](#Detection-of-structural-variants)**
- 	- [Subset files on scaffolds](#Subset-files-on-scaffolds)
 	- [Identify distant and everted read-pairs](#Identify-distant-and-everted-read-pairs)
 	- [Cluster distant and everted read-pairs within pools](#Cluster-distant-and-everted-read-pairs-within-pools)
 	- [Calculate relative read depth differences](#Calculate-relative-read-depth-differences)
@@ -501,16 +500,12 @@ By doing so, we detected 580 candidates.
 ## Detection of structural variants
 
 We aim to detect two types of structural variants (SVs), duplications and inversions. London Field population was compared to the susceptible reference genome, and to the susceptible London Lab population, in order to detect SVs that could have been selected and underlie the resistance phenotype.
-The presence of SVs was inferred based on abnormal read pair orientation and/or distance (insert size), and read depth variation. We used poolCNVcomp (North et al., 2020; Schrider et al., 2013; Schrider et al., 2016), a series of scripts designed for the detection of tandem duplications in pool-seq data, and adapted them to detect inverted duplications and simple inversions as well. 
+The presence of SVs was inferred based on abnormal read pair orientation and/or distance (insert size), and read depth variation. We used poolCNVcomp (North et al., 2020; Schrider et al., 2013; Schrider et al., 2016), a series of scripts designed for the detection of tandem duplications in pool-seq data (as shown below), and adapted them to detect inverted duplications and simple inversions as well (in attached Markdown). 
 Associated python scripts can also be downloaded here: https://gitlab.mbb.univ-montp2.fr/khalid/poolcnvcomp/-/tree/master
-
-### Subset files on scaffolds
-
-In the step 0, the goal is simply to subset strain files on scaffolds.
 
 ### Identify distant and everted read-pairs
 
-The first step identifies read pairs having abnormal orientation and extreme insert size (top 1% distribution) in each population. In a tandem duplication, read pairs that are falling between the two copies will both map on the reference genome in a reversed way (i.e. in opposite direction). For inverted duplication, one of the two paired reads will be in the wrong orientation. You will find the Markdown file dedicated to the detection of the inversions and inverted duplications in the repository (**poolInvertCNV_allscaffolds.Rmd**).
+The first step identifies read pairs having abnormal orientation and extreme insert size (top 1% distribution) in each population, for each scaffold. In a tandem duplication, read pairs that are falling between the two copies will both map on the reference genome in a reversed way (i.e. in opposite direction). For inverted duplication, one of the two paired reads will be in the wrong orientation. You will find the Markdown file dedicated to the detection of the inversions and inverted duplications in the repository (**poolInvertCNV_allscaffolds.Rmd**).
 
 ```{bash}
 mkdir /your-path/PoolSeq_Clec/CNV/step1
