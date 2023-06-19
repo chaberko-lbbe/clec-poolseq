@@ -509,9 +509,8 @@ mkdir /your-path/PoolSeq_Clec/CNV/step1
 mkdir /your-path/PoolSeq_Clec/CNV/step1/data
 ```
 
-To go faster, 1 script per pool (i.e. per population).
-
-step0and1_LL.sh
+To go faster, we can create one script per pool (i.e. per population) using:
+> nano step0and1_LL.sh
 
 ```{bash}
 #!/bin/bash
@@ -532,13 +531,13 @@ function step1d(){
     # Original sequence data available on Shot Read Archive, bioproject PRJNA603262
     ficBam=/your-path/PoolSeq_Clec/CNV/step1/${pool}_${chr}_mapped.bam
 
-    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 $ficBam | awk 'function abs(x){return ((x < 0.0) ? -x : x)}{if (abs($9) < 2000 && $5>=20) print abs($9)}' > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt # Extract the insert size distribution ; replace awk '{ if ($5 >= 20 && $9 <= 2000) print $9 }'
+    /your-path/Tools/samtools-1.10/bin/samtools view --threads 8 $ficBam | awk 'function abs(x){return ((x < 0.0) ? -x : x)}{if (abs($9) < 2000 && $5>=20) print abs($9)}' > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt # Extract the insert size distribution ; replace awk '{ if ($5 >= 20 && $9 <= 2000) print $9 }'
 
     sort -n -k 1 /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt  | awk '{all[NR] = $0} END{print all[int(NR*0.99 - 0.01)]}' > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE99_c${chr}p${pool}.txt # Compute the 99th percentile of the insert size distribution
 
     insertSizeCutoff=$(cat /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE99_c${chr}p${pool}.txt) # Define the variable insertSizeCutoff
 
-    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 $ficBam | python /your-path/PoolSeq_Clec/CNV/step1/step1_findDistantInserts.py $insertSizeCutoff > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/c${chr}p${pool}d.txt
+    /your-path/Tools/samtools-1.10/bin/samtools view --threads 8 $ficBam | python /your-path/PoolSeq_Clec/CNV/step1/step1_findDistantInserts.py $insertSizeCutoff > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/c${chr}p${pool}d.txt
 
     awk '{delta = $1 - avg; avg += delta / NR; mean2 += delta * ($1 - avg); } END { print sqrt(mean2 / NR); }' /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt  > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/SD_ISIZE_c${chr}p${pool}.txt # calculate SD of insert size
 
@@ -553,9 +552,9 @@ function step1e(){
 
     ficBam=/your-path/PoolSeq_Clec/CNV/step1/${pool}_${chr}_mapped.bam
 
-    /beegfs/data/soft/samtools-1.10/bin/samtools flagstat --threads 8 $ficBam | sed '9q;d'| cut -d ' ' -f 1 | cat > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/d${pool}_c${chr}.txt # Save read depth information for later calculation of normConst ; 9q;d replaced by 7q;d ??
+    /your-path/Tools/samtools-1.10/bin/samtools flagstat --threads 8 $ficBam | sed '9q;d'| cut -d ' ' -f 1 | cat > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/d${pool}_c${chr}.txt # Save read depth information for later calculation of normConst ; 9q;d replaced by 7q;d ??
 
-    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 $ficBam | python /your-path/PoolSeq_Clec/CNV/step1/step1_findEvertedInserts.py > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/c${chr}p${pool}e.txt # Identify everted reads
+    /your-path/Tools/samtools-1.10/bin/samtools view --threads 8 $ficBam | python /your-path/PoolSeq_Clec/CNV/step1/step1_findEvertedInserts.py > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/c${chr}p${pool}e.txt # Identify everted reads
 
     rm -rf $ficBam
 }
@@ -568,7 +567,7 @@ do
 for pool in LL # iterate across all pools
   do
 
-     /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/${pool}_mapped_sorted.bam "${chr}" > ${pool}_${chr}_mapped.bam
+     /your-path/Tools/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/${pool}_mapped_sorted.bam "${chr}" > ${pool}_${chr}_mapped.bam
 
      step1d $chr $pool
      step1e $chr $pool
@@ -581,73 +580,38 @@ done
 
 ### Step 2 & 3: Cluster distant and everted read-pairs within pools to identify deletions and tandem duplications
 
-**UPDATE 12/09/22 : re-run with script step2and3.R, with the following modifications:**
+I created an R script to replace steps 2 and 3 as created by North et al. 2019, with the following modifications:
 - change parameter insertSizeDiffCutoff = 4*SD on .sh file
 - remove computation of normcov
 - remove events with frequency <2 *in both populations* (after matching between populations)
 
-
-
 Some of these scaffolds carried events with huge number of reads, which made the soft very slow.
-Those events seemed to be quite small (for example here, normalized read number in pop1 = 1711.1256, in pop2 = 1224.4709, size = 966631-966231 = 400)
+Those events seemed to be quite small, as here: 
 
 NW_019392726.1,966231,966631	NW_019392726.1,966231,966631	1711.1256	NW_019392726.1,966231,966583	1224.4709	2217279	281	3443522	281	200	486.655		Quantitative	T	5.16945 	-12.38629	everted	FP	FP
 
+The normalized read number in pop1 (i.e. LL) = 1711.1256, in pop2 (i.e. LF) = 1224.4709, size = 966631-966231 = 400)
+
 So we decided to filter out those events based on size >=500 before running step2 and step3, since we will filter events >=1000 afterward.
-We had to do it on:
-- scaffold NW_019392715.1 for GL and LF
-- scaffold NW_019392726.1 for GL and LF
-- scaffold NW_019392782.1 for GL, LL and LF
+We had to do it on scaffolds NW_019392706.1, NW_019392715.1, NW_019392726.1, NW_019392782.1, NW_019392787.1, NW_019392930.1, and NW_019392955.1
 
 Here an example for NW_019392782.1:
 
 ```{r}
 # Back to step 1 !
 # cd /your-path/PoolSeq_Clec/CNV/step1/data/ChrNW_019392782.1
+# We have to do this onto the four strains - but here we show it only on London Lab (LL)
 
-GL <- read.table("cNW_019392782.1pGLe.txt", fill=T)
-LF <- read.table("cNW_019392782.1pLFe.txt", fill=T)
 LL <- read.table("cNW_019392782.1pLLe.txt", fill=T)
-
-colnames(GL)=c("readid","scaffold","sl","el","strand1","qual1","seq1","seqqual1","sr","er","strand2","qual2","seq2","seqqual2")
-
-colnames(LF)=c("readid","scaffold","sl","el","strand1","qual1","seq1","seqqual1","sr","er","strand2","qual2","seq2","seqqual2") 
 colnames(LL)=c("readid","scaffold","sl","el","strand1","qual1","seq1","seqqual1","sr","er","strand2","qual2","seq2","seqqual2")
 
 library(dplyr)
-GL <- GL %>% 
-  rowwise() %>%
-  mutate(left_start = min(sl,el,er,sr))
-GL <- GL %>% 
-  rowwise() %>%
-  mutate(right_end = max(sl,el,er,sr))
-
-LF <- LF %>% 
-  rowwise() %>%
-  mutate(left_start = min(sl,el,er,sr))
-LF <- LF %>% 
-  rowwise() %>%
-  mutate(right_end = max(sl,el,er,sr))
-
 LL <- LL %>% 
   rowwise() %>%
   mutate(left_start = min(sl,el,er,sr))
 LL <- LL %>% 
   rowwise() %>%
   mutate(right_end = max(sl,el,er,sr))
-
-GL$size <- GL$right_end - GL$left_start
-summary(GL$size)
-dim(GL) # 2654487
-GL <- GL[GL$size>=500,]
-GL <- GL[!is.na(GL$size),] 
-dim(GL) # 10765
-
-LF$size <- LF$right_end - LF$left_start
-dim(LF) # 2407082
-LF <- LF[LF$size>=500,] 
-LF <- LF[!is.na(LF$size),] 
-dim(LF) # 10078
 
 LL$size <- LL$right_end - LL$left_start
 dim(LL) # 1303307
@@ -657,51 +621,456 @@ dim(LL) # 4639
 
 # remove extra columns
 # and dowload it
-
-GL <- as.data.frame(GL)
-LF <- as.data.frame(LF)
 LL <- as.data.frame(LL)
-
-GL <- GL[,c(1:14)]
-LF <- LF[,c(1:14)]
 LL <- LL[,c(1:14)]
-
-write.table(GL, "cNW_019392782.1pGLe_cut.txt", quote=F, sep="\t", row.names=F, col.names=F)
-write.table(LF, "cNW_019392782.1pLFe_cut.txt", quote=F, sep="\t", row.names=F, col.names=F)
 write.table(LL, "cNW_019392782.1pLLe_cut.txt", quote=F, sep="\t", row.names=F, col.names=F)
-
-# then re-do step 2 & 3 on those cropped files
 ```
 
-
-Output file contains:
-- The coordinates of the cluster, comma-separated.
-- The coordinates of the cluster found in pool 1 ("NA" if the cluster was only found in pool 2)
-- The (corrected) *number of read pairs supporting the event in pool 1* (0 if only found in pool 2)
-- The coordinates found in pool 2 ("NA" if the cluster was only found in pool 1)
-- The (corrected) *number of read pairs supporting the event in pool 2* (0 if only found in pool 1)
-
-> !Warning! everted file has right format, but not the other:
-
-head /your-path/PoolSeq_Clec/CNV/step3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_everted.tsv
-NW_019392721.1,3595,85423	NW_019392721.1,3595,85423	0.0	NW_019392721.1,3595,85423	6.0
-
-head /your-path/PoolSeq_Clec/CNV/step3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_distant.tsv
-30419,30483,31176,31325,907,23829938
-> We should delete those lines before lines at the right format:
+Let's create our R file with steps 2 and 3 now:
 
 ```{bash}
-for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds) 
-do
-grep -o 'N.*' /your-path/PoolSeq_Clec/CNV/step3/data/comparison1/c${chr}PLLvsPLF_distant.tsv > /your-path/PoolSeq_Clec/CNV/step3/data/comparison1/c${chr}PLLvsPLF_distant_clean.tsv
-done
+nano step2and3.R
 ```
 
-UPDATE 09/09: while using step2and3, we have to remove small events in following scaffolds (as shown line 365) before re-running it (error "out of memory"):
-NW_019392706.1, NW_019392715.1, NW_019392726.1, NW_019392782.1, NW_019392787.1, NW_019392930.1, and NW_019392955.1
-Then, re-run it but with the following modified command:
-step2and3.R c${chr}p${poolA}e_cut.txt c${chr}p${poolB}e_cut.txt $normConstA $normConstB $insertSizeDiffCutoff_popA $insertSizeDiffCutoff_popB $distanceCutoff c${chr}P${poolA}_everted_cluster.tsv c${chr}P${poolB}_everted_cluster.tsv c${chr}P${poolA}vsP${poolB}_everted.tsv
+```{r}
+#!/usr/bin/env Rscript
 
+##################################################################################################################
+# parse arguments given to the script
+##################################################################################################################
+
+args = commandArgs(trailingOnly=TRUE)
+
+# test if there is the required number of argument: if not, return an error
+if (length(args)!=10) {
+  stop("Ten arguments must be supplied", call.=FALSE)
+}
+if (length(args)==10) {
+  # file1="cNW_019392689.1pLLinv.txt" # output step1 - poolA
+  # file2="cNW_019392689.1pLFinv.txt" # output step1 - poolB
+  # normConstA=1.31
+  # normConstB=0.81
+  # insertSizeDiffCutoff_popA=250 # bp difference authorized for CLUSTERED intervals
+  # insertSizeDiffCutoff_popB=250 # bp difference authorized for CLUSTERED intervals
+  # distanceCutoff=500 # bp difference authorized for MATCHED intervals
+  # output_file_1="LL_step2.txt"
+  # output_file_2="LF_step2.txt"
+  # output_file_3="LL_vs_LF_step3.txt"
+
+  file1=args[1]
+  file2=args[2]
+  normConstA=as.numeric(args[3])
+  normConstB=as.numeric(args[4])
+  insertSizeDiffCutoff_popA=as.numeric(args[5]) 
+  insertSizeDiffCutoff_popB=as.numeric(args[6]) 
+  distanceCutoff=as.numeric(args[7])
+  output_file_1=args[8] 
+  output_file_2=args[9] 
+  output_file_3=args[10] 
+}
+
+##################################################################################################################
+#  import data and extract usefull information
+##################################################################################################################
+
+# Load librairies
+suppressPackageStartupMessages({
+  library(IRanges)
+  library(igraph)
+  library(dplyr)
+  library(stringr)
+})
+
+Pop1=read.csv2(file1, sep="\t", header=F)
+Pop2=read.csv2(file2, sep="\t", header=F)
+
+# get coordinates
+
+Pop1_coord=Pop1[,c(2,3,4,9,10)]
+names(Pop1_coord)=c("scaffold","sl","el","sr","er")  
+
+Pop2_coord=Pop2[,c(2,3,4,9,10)]
+names(Pop2_coord)=c("scaffold","sl","el","sr","er")   
+
+scaffold <- unique(Pop1_coord$scaffold)
+
+##################################################################################################################
+# Find overlapping ranges within a population and test whether they should be clustered
+##################################################################################################################
+
+# Goal: compute number of clustered reads
+# We want to find overlapping window on extreme left start and right end
+
+# Check that they are the respective smallest/highest values
+
+Pop1_coord <- Pop1_coord %>% 
+  rowwise() %>%
+  mutate(left_start = min(sl,el,er,sr))
+Pop1_coord <- Pop1_coord %>% 
+  rowwise() %>%
+  mutate(right_end = max(sl,el,er,sr))
+
+Pop2_coord <- Pop2_coord %>% 
+  rowwise() %>%
+  mutate(left_start = min(sl,el,er,sr))
+Pop2_coord <- Pop2_coord %>% 
+  rowwise() %>%
+  mutate(right_end = max(sl,el,er,sr))
+
+Pop1_coord$interval=paste0(Pop1_coord$left_start, "-", Pop1_coord$right_end)
+Pop2_coord$interval=paste0(Pop2_coord$left_start, "-", Pop2_coord$right_end)
+
+# Define intervals using IRanges package
+intervals_pop1=IRanges(Pop1_coord$left_start, Pop1_coord$right_end)
+intervals_pop2=IRanges(Pop2_coord$left_start, Pop2_coord$right_end)
+
+# We need a match between intervals_pop1 > to cluster them
+
+overlap1 = findOverlapPairs(query = intervals_pop1, subject = intervals_pop1)
+
+tab_coord_x1=as.data.frame(overlap1)
+tab_coord_x1$diff1=abs(tab_coord_x1$first.start-tab_coord_x1$second.start)
+tab_coord_x1$diff2=abs(tab_coord_x1$first.end-tab_coord_x1$second.end)
+
+# rule : the difference between the positions of inserts must be < insertSizeDiffCutoff
+# at least in one of the two position (in the other position we allowed insertSizeDiffCutoff*2)
+tab_coord_x1$match=rep(0, length(overlap1))
+tab_coord_x1$match[(tab_coord_x1$diff1<insertSizeDiffCutoff_popA & tab_coord_x1$diff2<insertSizeDiffCutoff_popA) | 
+                     (tab_coord_x1$diff1<insertSizeDiffCutoff_popA & tab_coord_x1$diff2<insertSizeDiffCutoff_popA)] <- 1
+
+matches1=data.frame(as.data.frame(overlap1), tab_coord_x1$match)
+
+matches1$first_interval=paste0("A_",matches1$first.start, "-", matches1$first.end)
+matches1$second_interval=paste0("B_",matches1$second.start, "-", matches1$second.end)
+g1 <- graph.edgelist( as.matrix(matches1[matches1$tab_coord_x1.match==1,][c("first_interval", "second_interval")]) )
+
+# redefine the positions of each interval (merging of the x matched intervals ) 
+# and create ouput table for clustered intervals
+
+liste1=split(names(igraph::clusters(g1)$membership), igraph::clusters(g1)$membership)
+
+liste_intervals1=lapply(X = liste1, FUN=function(x){
+  n=length(x)
+  table=strsplit(x, split = "_")
+  table=do.call(rbind.data.frame,table)
+  intervals=do.call(rbind.data.frame, strsplit(as.character(table[,2]), "-"))
+  table=data.frame(table, intervals)
+  names(table)=c("pop", "interval", "start", "end")
+  table_A=table[table$pop=="A",]
+  table_B=table[table$pop=="B",]
+  
+  table=rbind(table_A, table_B)
+  table$start=as.numeric(as.character(table$start))
+  table$end=as.numeric(as.character(table$end))
+  
+  # define new interval positions
+  new_interval=reduce(IRanges(start = min(table$start), end = max(table$end))) 
+  
+  # append intervals from A and from B, and the number of reads supporting each
+  res=data.frame(paste(scaffold, start(new_interval), end(new_interval),sep=","), 
+                 paste(x=table_A$interval, sep=" ", collapse=","),
+                 nreads_A=length(table_A$interval),
+                 paste(x=table_B$interval, sep=" ", collapse=","),
+                 nreads_B=length(table_B$interval)
+  )
+  names(res)=c("interval", "intervals_A", "nreads_A", "intervals_B", "nreads_B")
+  return(res)
+})
+
+liste_intervals1=do.call(rbind.data.frame, liste_intervals1)
+#check that columns 4:5 are just duplicates of columns 2:3
+# all(liste_intervals1$nreads_A == liste_intervals1$nreads_B)
+
+liste_intervals1 <- liste_intervals1[,c(1:3)]
+
+# Now, for pop2:
+overlap2 = findOverlapPairs(query = intervals_pop2, subject = intervals_pop2)
+
+tab_coord_x2=as.data.frame(overlap2)
+tab_coord_x2$diff1=abs(tab_coord_x2$first.start-tab_coord_x2$second.start)
+tab_coord_x2$diff2=abs(tab_coord_x2$first.end-tab_coord_x2$second.end)
+
+tab_coord_x2$match=rep(0, length(overlap2))
+tab_coord_x2$match[(tab_coord_x2$diff1<insertSizeDiffCutoff_popB & tab_coord_x2$diff2<insertSizeDiffCutoff_popB) | 
+                     (tab_coord_x2$diff1<insertSizeDiffCutoff_popB & tab_coord_x2$diff2<insertSizeDiffCutoff_popB)] <- 1
+
+matches2=data.frame(as.data.frame(overlap2), tab_coord_x2$match)
+
+matches2$first_interval=paste0("A_",matches2$first.start, "-", matches2$first.end)
+matches2$second_interval=paste0("B_",matches2$second.start, "-", matches2$second.end)
+g2 <- graph.edgelist( as.matrix(matches2[matches2$tab_coord_x2.match==1,][c("first_interval", "second_interval")]) )
+
+# redefine the positions of each interval (merging of the x matched intervals) 
+# and create ouput table for clustered intervals
+
+liste2=split(names(igraph::clusters(g2)$membership), igraph::clusters(g2)$membership)
+
+liste_intervals2=lapply(X = liste2, FUN=function(x){
+  n=length(x)
+  table=strsplit(x, split = "_")
+  table=do.call(rbind.data.frame,table)
+  intervals=do.call(rbind.data.frame, strsplit(as.character(table[,2]), "-"))
+  table=data.frame(table, intervals)
+  names(table)=c("pop", "interval", "start", "end")
+  table_A=table[table$pop=="A",]
+  table_B=table[table$pop=="B",]
+  
+  table=rbind(table_A, table_B)
+  table$start=as.numeric(as.character(table$start))
+  table$end=as.numeric(as.character(table$end))
+  
+  # define new interval positions
+  new_interval=reduce(IRanges(start = min(table$start), end = max(table$end))) 
+
+  # append intervals from A and from B, and the number of reads supporting each
+  res=data.frame(paste(scaffold, start(new_interval), end(new_interval),sep=","), 
+                 paste(x=table_A$interval, sep=" ", collapse=","),
+                 nreads_A=length(table_A$interval),
+                 paste(x=table_B$interval, sep=" ", collapse=","),
+                 nreads_B=length(table_B$interval)
+  )
+  names(res)=c("interval", "intervals_A", "nreads_A", "intervals_B", "nreads_B")
+  return(res)
+})
+
+liste_intervals2=do.call(rbind.data.frame, liste_intervals2)
+#check that columns 4:5 are just duplicates of columns 2:3
+#all(liste_intervals2$nreads_A == liste_intervals2$nreads_B)
+
+liste_intervals2 <- liste_intervals2[,c(1:3)]
+
+print(paste("Congrats!! Clustering (step2) is done on scaffold", scaffold))
+
+##################################################################################################################
+# Filter on the number of reads supporting the event and transform to clean tables
+##################################################################################################################
+
+threshold_reads=1 # useless here, but you can set it to higher value
+intervals1_clean=liste_intervals1[liste_intervals1$nreads_A>=threshold_reads,]
+intervals2_clean=liste_intervals2[liste_intervals2$nreads_A>=threshold_reads,]
+
+if(nrow(intervals1_clean)!=0){
+  intervals1_clean[c("scaffold","start","end")] <- str_split_fixed(intervals1_clean$interval, ",", 3)
+  
+  intervals1_clean <- intervals1_clean[,-c(1,2)]
+  colnames(intervals1_clean) <- c("nreads","scaffold","start","end")
+  
+  intervals1_clean$start=as.numeric(as.character(intervals1_clean$start))
+  intervals1_clean$end=as.numeric(as.character(intervals1_clean$end))
+  
+  write.table(x = intervals1_clean, file = output_file_1, quote = FALSE, col.names = FALSE, row.names = FALSE, sep="\t")
+}else{
+  print("Sadly, no cluster passed the threshold >=2 reads in 1st population.")
+}
+
+# Pop2 
+
+if(nrow(intervals1_clean)!=0){
+  intervals2_clean[c("scaffold","start","end")] <- str_split_fixed(intervals2_clean$interval, ",", 3)
+  
+  intervals2_clean <- intervals2_clean[,-c(1,2)]
+  colnames(intervals2_clean) <- c("nreads","scaffold","start","end")
+  
+  intervals2_clean$start=as.numeric(as.character(intervals2_clean$start))
+  intervals2_clean$end=as.numeric(as.character(intervals2_clean$end))
+}else{
+  print("Sadly, no cluster passed the threshold >=2 reads in 2nd population.")
+}
+
+write.table(x = intervals2_clean, file = output_file_2, quote = FALSE, col.names = FALSE, row.names = FALSE, sep="\t")
+
+##################################################################################################################
+# Find overlapping ranges between populations and test whether they should be matched
+##################################################################################################################
+
+# Goal: compute number of clustered reads
+# We want to find overlapping window on start and end
+
+if(nrow(intervals1_clean)!=0){
+  intervals1_clean$interval=paste0(intervals1_clean$start, "-", intervals1_clean$end)
+}
+
+if(nrow(intervals2_clean)!=0){
+  intervals2_clean$interval=paste0(intervals2_clean$start, "-", intervals2_clean$end)
+}
+
+# Define intervals using IRanges package
+intervals_pop1=IRanges(intervals1_clean$start, intervals1_clean$end)
+intervals_pop2=IRanges(intervals2_clean$start, intervals2_clean$end)
+
+# We need to match intervals_pop1 and intervals_pop2 
+
+overlap = findOverlapPairs(query = intervals_pop1, subject = intervals_pop2)
+
+tab_coord_x=as.data.frame(overlap)
+tab_coord_x$diff1=abs(tab_coord_x$first.start-tab_coord_x$second.start)
+tab_coord_x$diff2=abs(tab_coord_x$first.end-tab_coord_x$second.end)
+
+tab_coord_x$match=rep(0, length(overlap))
+tab_coord_x$match[(tab_coord_x$diff1<distanceCutoff & tab_coord_x$diff2<distanceCutoff)] <- 1
+
+matches=data.frame(as.data.frame(overlap), tab_coord_x$match)
+
+if(nrow(matches)!=0){
+  matches$first_interval=paste0("A_",matches$first.start, "-", matches$first.end)
+  matches$second_interval=paste0("B_",matches$second.start, "-", matches$second.end)
+  g <- graph.edgelist( as.matrix(matches[matches$tab_coord_x.match==1,][c("first_interval", "second_interval")]) )
+}
+
+# redefine the positions of each interval (merging of the x matched intervals ) 
+# and create ouput table for clustered intervals
+
+if(exists("g")){ 
+  if(clusters(g)$no!=0){
+    
+    sub_pop1 <- intervals1_clean[,c("scaffold", "start", "end", "nreads")]
+    sub_pop2 <- intervals2_clean[,c("scaffold", "start", "end", "nreads")]
+    
+    liste=split(names(igraph::clusters(g)$membership), igraph::clusters(g)$membership)
+    liste_intervals=lapply(X = liste, FUN=function(x){
+      n=length(x)
+      table=strsplit(x, split = "_")
+      table=do.call(rbind.data.frame,table)
+      intervals=do.call(rbind.data.frame, strsplit(as.character(table[,2]), "-"))
+      table=data.frame(table, intervals)
+      names(table)=c("pop", "interval", "start", "end")
+      table_A=table[table$pop=="A",]
+      table_B=table[table$pop=="B",]
+    
+      # add read numbers supporting each interval
+      table_A=merge(x = table_A, y = sub_pop1, all.x=TRUE, all.y=FALSE)
+      table_B=merge(x = table_B, y = sub_pop2, all.x=TRUE, all.y=FALSE)
+      # sort on read numbers
+      table_A=table_A[order(as.numeric(as.character(table_A$nreads)), decreasing = TRUE),]
+      table_B=table_B[order(as.numeric(as.character(table_B$nreads)), decreasing = TRUE),]
+    
+      table=rbind(table_A, table_B)
+      table$start=as.numeric(as.character(table$start))
+      table$end=as.numeric(as.character(table$end))
+    
+      # sort on read numbers
+      table=table[order(table$nreads, decreasing = TRUE),]
+    
+      # define new interval positions
+      new_interval=reduce(IRanges(start = table$start, end = table$end))
+    
+      # append intervals from A and from B, and the number of reads supporting each
+      res=data.frame(paste(table_A$scaffold[1], start(new_interval), end(new_interval),sep=","), 
+                   paste(x=table_A$interval, sep=" ", collapse=","),
+                   sum(table_A$nreads),
+                   paste(x=table_B$interval, sep=" ", collapse=","),
+                   sum(table_B$nreads)
+      )
+      names(res)=c("interval", "intervals_A", "nreads_A", "intervals_B", "nreads_B")
+      return(res)
+    })
+    liste_intervals=do.call(rbind.data.frame, liste_intervals)
+  
+    intervals_clean <- liste_intervals
+  
+    intervals_clean[c("scaffold","start","end")] <- str_split_fixed(intervals_clean$interval, ",", 3)
+  
+    intervals_clean <- intervals_clean[,-1]
+    colnames(intervals_clean) <- c("reads_A","nreads_A","reads_B","nreads_B","scaffold","start","end")
+    intervals_clean$interval=paste0(intervals_clean$start, "-", intervals_clean$end)
+  }
+}
+
+##################################################################################################################
+# now we need to add the intervals that are specific to one population (the previous ones were shared by both)
+##################################################################################################################
+
+if(exists("intervals_clean")){
+  matched_intervals_A=unlist(strsplit(as.character(intervals_clean$reads_A), split = ","))
+  matched_intervals_B=unlist(strsplit(as.character(intervals_clean$reads_B), split = ","))
+}
+
+if(exists("matched_intervals_A")){
+  if(!is.null(matched_intervals_A)){
+    intervals1_clean_specific=intervals1_clean[-which(intervals1_clean$interval %in% matched_intervals_A),]
+    }else{
+      intervals1_clean_specific=intervals1_clean
+    }
+}
+
+if(exists("matched_intervals_A")){
+  if(!is.null(matched_intervals_B)){
+    intervals2_clean_specific=intervals2_clean[-which(intervals2_clean$interval %in% matched_intervals_B),]
+    }else{
+      intervals2_clean_specific=intervals2_clean
+    }
+}
+
+if(exists("intervals1_clean_specific")){
+  if(nrow(intervals1_clean_specific)!=0){
+    Pop1_coord_specific=data.frame(paste(intervals1_clean_specific$scaffold, intervals1_clean_specific$start, intervals1_clean_specific$end, sep=","),
+                                 paste(intervals1_clean_specific$scaffold, intervals1_clean_specific$start, intervals1_clean_specific$end, sep=","),
+                                 intervals1_clean_specific$nreads,
+                                 NA,
+                                 0)
+    names(Pop1_coord_specific)=c("interval", "intervals_A", "nreads_A", "intervals_B", "nreads_B")
+  }
+}
+
+if(exists("intervals1_clean_specific")){
+  if(nrow(intervals2_clean_specific)!=0){
+    Pop2_coord_specific=data.frame(paste(intervals2_clean_specific$scaffold, intervals2_clean_specific$start, intervals2_clean_specific$end, sep=","),
+                                 NA,
+                                 0,
+                                 paste(intervals2_clean_specific$scaffold, intervals2_clean_specific$start, intervals2_clean_specific$end, sep=","),
+                                 intervals2_clean_specific$nreads)
+    names(Pop2_coord_specific)=c("interval", "intervals_A", "nreads_A", "intervals_B", "nreads_B")
+  }
+}
+
+# combine shared and specific intervals:
+if(exists("intervals_clean")){ 
+  if(nrow(intervals_clean)!=0){
+  All_pops_coord_specific=data.frame(paste(intervals_clean$scaffold, intervals_clean$start, intervals_clean$end, sep=","),
+                                     paste(intervals_clean$scaffold, intervals_clean$start, intervals_clean$end, sep=","),
+                                     intervals_clean$nreads_A,
+                                     paste(intervals_clean$scaffold, intervals_clean$start, intervals_clean$end, sep=","),
+                                     intervals_clean$nreads_B)
+  names(All_pops_coord_specific)=c("interval", "intervals_A", "nreads_A", "intervals_B", "nreads_B")
+  }
+}
+
+output <- as.data.frame(rbind(if(exists("All_pops_coord_specific")) All_pops_coord_specific,
+                              if(exists("Pop1_coord_specific")) Pop1_coord_specific,
+                              if(exists("Pop2_coord_specific")) Pop2_coord_specific))
+
+if(exists("output")){ 
+  if(nrow(output)!=0){
+    output <- output[output$nreads_A>=2 | output$nreads_B>=2,]
+  }
+}
+
+# correct number of reads to take into account differences in coverage between samples
+# output$nreads_A= output$nreads_A*normConstA
+# output$nreads_B= output$nreads_B*normConstB
+
+dim(output)[1]
+
+if(dim(output)[1]==0){ 
+  print("Sadly, output is empty due to no clustered (and therefore no matched) reads")
+}
+
+print(paste("Congrats!! Matching events between populations (step3) is done on scaffold", scaffold))
+
+##################################################################################################################
+# write to disk
+##################################################################################################################
+
+write.table(x = output, file = output_file_3, quote = FALSE, col.names = FALSE, row.names = FALSE, sep="\t")
+```
+
+Then, run it with the following modified command:
+
+```{R}
+step2and3.R c${chr}p${poolA}e_cut.txt c${chr}p${poolB}e_cut.txt $normConstA $normConstB $insertSizeDiffCutoff_popA $insertSizeDiffCutoff_popB $distanceCutoff c${chr}P${poolA}_everted_cluster.tsv c${chr}P${poolB}_everted_cluster.tsv c${chr}P${poolA}vsP${poolB}_everted.tsv
+```
+
+You can define normConstA, normConstB, insertSizeDiffCutoff_popA, insertSizeDiffCutoff_popB and distanceCutoff with the same parameter as we do - see in "parse arguments given to the script".
 
 ### Step 4: Calculate relative read depth differences
 
@@ -769,7 +1138,7 @@ python /your-path/PoolSeq_Clec/CNV/step4/step4_countReadPairsInCNV-KH-pySam.py \
 
 # everted read-pair clusters only
 python2 /your-path/PoolSeq_Clec/CNV/step4/step4_countReadPairsInCNV-KH-pySam.py \
-/your-path/PoolSeq_Clec/CNV/step3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_everted.tsv \
+/your-path/PoolSeq_Clec/CNV/step2and3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_everted.tsv \
   $ficBamA $MaskedRegionsFile > /your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_Aonly_everted.tsv # this is an intermediate file
 
 python2 /your-path/PoolSeq_Clec/CNV/step4/step4_countReadPairsInCNV-KH-pySam.py \
@@ -785,13 +1154,13 @@ for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds)
 do
   for comparison in 1 # only comparison 1 here
   do
-    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LL_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/step4/LL_${chr}_mapped.bam
+    /your-path/Tools/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LL_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/step4/LL_${chr}_mapped.bam
     
-    /beegfs/data/soft/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/step4/LL_${chr}_mapped.bam
+    /your-path/Tools/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/step4/LL_${chr}_mapped.bam
     
-    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LF_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/step4/LF_${chr}_mapped.bam
+    /your-path/Tools/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LF_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/step4/LF_${chr}_mapped.bam
     
-    /beegfs/data/soft/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/step4/LF_${chr}_mapped.bam
+    /your-path/Tools/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/step4/LF_${chr}_mapped.bam
     
     step4 $chr $comparison
   done
@@ -806,23 +1175,25 @@ We kept the same comparison name as in step4 > so we replace "altname" with "com
 So first, we want to compute upper 95% threshold and lower 5% threshold for the *expected difference in
 read depth*, based on empirical sampling of the data:
 
-> thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Up90_allChr_C"${comparison}".tsv"
-> thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Lo10_allChr_C"${comparison}".tsv"
+```{bash}
+thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Up90_allChr_C"${comparison}".tsv"
+thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Lo10_allChr_C"${comparison}".tsv"
+```
 
-We checked step3 output:
+We checked step2and3 output:
 
 For each comparison, we have an everted and a distant file with columns:
 V3 = The (corrected) number of read pairs supporting the event in pool 1 = LL (0 if only found in pool 2)
 V5 = The (corrected) number of read pairs supporting the event in pool 2 = LF (0 if only found in pool 2)
 
-quantile(cNW_019392721.1PLLvsPLF_everted$V3, probs=seq(0,1,0.01))
+quantile(cNW_019392721.1PPLLvsPLF_everted$V3, probs=seq(0,1,0.01))
 
 To create random intervals per size class, we used bedtools, with the file GCF_000648675.2_Clec_2.1_genomic.txt which contains the name of the scaffolds and their size:
 
+```{bash}
 mkdir random_window
 cd /your-path/PoolSeq_Clec/CNV
 
-```{bash}
 /your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 500 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-500.txt
 
 /your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 1000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-1kb.txt
@@ -895,7 +1266,7 @@ done
 done
 ```
 
-But we want it to be formatted like the output of step3:
+But we want it to be formatted like the output of step2and3:
 
 NW_019394230.1,43996,44176	NW_019394230.1,43996,44176	2	NW_019394230.1,43996,44176	2
 
@@ -912,7 +1283,7 @@ done
 ```
 
 Faire tourner step4 sur :
-/your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/${chr}.txt2
+/your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/${chr}.txt
 
 ```{bash}
 #!/bin/bash
@@ -969,13 +1340,13 @@ for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds)
 do
 for comparison in 1 # only comparison 1 here
 do
-/beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LL_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LL_${chr}_mapped.bam
+/your-path/Tools/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LL_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LL_${chr}_mapped.bam
 
-/beegfs/data/soft/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LL_${chr}_mapped.bam
+/your-path/Tools/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LL_${chr}_mapped.bam
 
-/beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LF_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LF_${chr}_mapped.bam
+/your-path/Tools/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LF_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LF_${chr}_mapped.bam
 
-/beegfs/data/soft/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LF_${chr}_mapped.bam
+/your-path/Tools/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LF_${chr}_mapped.bam
 
 step4 $chr $comparison
 done
@@ -986,7 +1357,7 @@ done
 Then, merge all files per scaffold into one:
 
 ```{bash}
-cat NW_019*.1_LLvsPLF_random.tsv > LLvsPLF_random.txt
+cat NW_019*.1_PLLvsPLF_random.tsv > PLLvsPLF_random.txt
 ```
 
 We then compute the read depth ratio as in step4.5 (12th field):
@@ -1009,18 +1380,18 @@ We then compute the read depth ratio as in step4.5 (12th field):
 Do this computation on R:
 
 ```{r}
-R
-test <- read.table("LLvsPLF_random.txt")
+test <- read.table("PLLvsPLF_random.txt")
 test$ratio <- (test$V6/test$V7)/(test$V8/test$V9)
 quantile(test$ratio,c(0.25,0.75), na.rm=T)
 q()
 n
 ```
 
+```{bash}
 cd /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95
+```
 
 ```{r}
-# R
 LL1kb <- read.table("out-cov-LL-1kb.txt")
 LF1kb <- read.table("out-cov-LF-1kb.txt")
 
@@ -1060,7 +1431,7 @@ To do this over all files:
 ```{bash}
 for SizeClass in $(cat /your-path/PoolSeq_Clec/CNV/ListeSize)
 do
-/beegfs/data/soft/R-4.0.5/bin/Rscript /your-path/PoolSeq_Clec/CNV/compute-quantiles-random-windows.R /your-path/PoolSeq_Clec/CNV/result-cov-random/random-windows-"$SizeClass".txt_covLL_ok.txt /your-path/PoolSeq_Clec/CNV/result-cov-random/random-windows-"$SizeClass".txt_covLF_ok.txt /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/quantiles_"$SizeClass".txt
+/your-path/Tools/R-4.0.5/bin/Rscript /your-path/PoolSeq_Clec/CNV/compute-quantiles-random-windows.R /your-path/PoolSeq_Clec/CNV/result-cov-random/random-windows-"$SizeClass".txt_covLL_ok.txt /your-path/PoolSeq_Clec/CNV/result-cov-random/random-windows-"$SizeClass".txt_covLF_ok.txt /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/quantiles_"$SizeClass".txt
 done
 ```
 
@@ -1536,22 +1907,22 @@ cd /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP
 
 while read line;
 do 
-/beegfs/data/varaldi/miniconda3/bin/samtools coverage -r $line LL_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
+/your-path/Tools/miniconda3/bin/samtools coverage -r $line LL_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
 done < /your-path/PoolSeq_Clec/CNV/dup_samtools_start.txt > /your-path/PoolSeq_Clec/CNV/dup_coverage_start_LL.txt
 
 while read line;
 do 
-/beegfs/data/varaldi/miniconda3/bin/samtools coverage -r $line LF_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
+/your-path/Tools/miniconda3/bin/samtools coverage -r $line LF_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
 done < /your-path/PoolSeq_Clec/CNV/dup_samtools_start.txt > /your-path/PoolSeq_Clec/CNV/dup_coverage_start_LF.txt
 
 while read line;
 do 
-/beegfs/data/varaldi/miniconda3/bin/samtools coverage -r $line LL_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
+/your-path/Tools/miniconda3/bin/samtools coverage -r $line LL_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
 done < /your-path/PoolSeq_Clec/CNV/dup_samtools_end.txt > /your-path/PoolSeq_Clec/CNV/dup_coverage_end_LL.txt
 
 while read line;
 do 
-/beegfs/data/varaldi/miniconda3/bin/samtools coverage -r $line LF_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
+/your-path/Tools/miniconda3/bin/samtools coverage -r $line LF_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
 done < /your-path/PoolSeq_Clec/CNV/dup_samtools_end.txt > /your-path/PoolSeq_Clec/CNV/dup_coverage_end_LF.txt
 ```
 
@@ -1926,30 +2297,11 @@ resist_inv <- resist_inv[resist_inv$Fst>=0.0396994,] # 10 obs
 outliers_resist <- rbind(resist_dup_inv, resist_dup_tand)
 outliers_resist <- rbind(outliers_resist, resist_inv)
 
-write.xlsx(outliers_resist, file="outliers_resist.xls")
-View(outliers_resist)
 length(unique(resist_dup$Coords)) # 143 events
 length(unique(resist_dup$Name)) # 130 genes
 
-
-resist_dup_LG <-  resist_dup[!is.na(resist_dup$LG),] # 160
-resist_dup_LG11 <-  resist_dup_LG[resist_dup_LG$LG==11,] # 38
-
-all_clean_LG <-  all_clean[!is.na(all_clean$LG),]
-all_clean_LG11 <-  all_clean_LG[all_clean_LG$LG==11,] # 117
-all_clean_scaff2721 <-  all_clean_LG11[all_clean_LG11$scaffold=="NW_019392721.1",] # 42
-
-library(plyr)
-as.factor(all_clean_scaff2721$TypeEvent)
-
-write.xlsx(resist_dup_LG11, file="resist_LG11.xls", row.names = F)
+write.xlsx(outliers_resist, file="outliers_resist.xls")
 ```
-
-
-
-
-
-
 
 
 
