@@ -28,7 +28,7 @@ Contact: chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 	- [Combining conditions](#Combining-conditions)
 	- [Synonymous or not](#Synonymous-or-not)
 
- - **[Copy Number Variation](#Copy-Number-Variation)**
+ - **[Detection of structural variants](#Detection-of-structural-variants)**
  	- [Computing average coverage by gene](#Computing-average-coverage-by-gene)
 	- [Selecting amplified genes](#Selecting-amplified-genes)
 
@@ -494,6 +494,1460 @@ summary(as.factor(data$Colour))
 By doing so, we detected 580 candidates.
 
 ### Synonymous or not
+
+## Detection of structural variants
+
+Aim of clustering and analysing tandem duplications and deletions
+(collectively, Copy-Number Variants, CNVs)
+
+### Step 0: Subset files on scaffolds
+
+### Step 1: Identify distant and everted read-pairs
+
+```{bash}
+mkdir /your-path/PoolSeq_Clec/CNV/step1
+mkdir /your-path/PoolSeq_Clec/CNV/step1/data
+```
+
+To go faster, 1 script per pool (i.e. per population).
+
+step0and1_LL.sh
+
+```{bash}
+#!/bin/bash
+#SBATCH --cpus-per-task=8
+#SBATCH --mem 10G
+#SBATCH -t 24:00:00
+#SBATCH -e /your-path/PoolSeq_Clec/CNV/step1_LL.err
+#SBATCH -o /your-path/PoolSeq_Clec/CNV/step1_LL.out
+#SBATCH -J Genome_Cimex_lectularius
+
+cd /your-path/PoolSeq_Clec/CNV/
+
+function step1d(){
+
+    chr=$1
+    pool=$2
+
+    # Original sequence data available on Shot Read Archive, bioproject PRJNA603262
+    ficBam=/your-path/PoolSeq_Clec/CNV/step1/${pool}_${chr}_mapped.bam
+
+    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 $ficBam | awk 'function abs(x){return ((x < 0.0) ? -x : x)}{if (abs($9) < 2000 && $5>=20) print abs($9)}' > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt # Extract the insert size distribution ; replace awk '{ if ($5 >= 20 && $9 <= 2000) print $9 }'
+
+    sort -n -k 1 /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt  | awk '{all[NR] = $0} END{print all[int(NR*0.99 - 0.01)]}' > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE99_c${chr}p${pool}.txt # Compute the 99th percentile of the insert size distribution
+
+    insertSizeCutoff=$(cat /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE99_c${chr}p${pool}.txt) # Define the variable insertSizeCutoff
+
+    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 $ficBam | python /your-path/PoolSeq_Clec/CNV/step1/step1_findDistantInserts.py $insertSizeCutoff > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/c${chr}p${pool}d.txt
+
+    awk '{delta = $1 - avg; avg += delta / NR; mean2 += delta * ($1 - avg); } END { print sqrt(mean2 / NR); }' /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/ISIZE_distribution_c${chr}p${pool}.txt  > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/SD_ISIZE_c${chr}p${pool}.txt # calculate SD of insert size
+
+}
+
+# Define function for running the script to identify everted reads:
+
+function step1e(){
+
+    chr=$1
+    pool=$2
+
+    ficBam=/your-path/PoolSeq_Clec/CNV/step1/${pool}_${chr}_mapped.bam
+
+    /beegfs/data/soft/samtools-1.10/bin/samtools flagstat --threads 8 $ficBam | sed '9q;d'| cut -d ' ' -f 1 | cat > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/d${pool}_c${chr}.txt # Save read depth information for later calculation of normConst ; 9q;d replaced by 7q;d ??
+
+    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 $ficBam | python /your-path/PoolSeq_Clec/CNV/step1/step1_findEvertedInserts.py > /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr/c${chr}p${pool}e.txt # Identify everted reads
+
+    rm -rf $ficBam
+}
+
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds) # iterate across all chromosomes
+do
+  mkdir /your-path/PoolSeq_Clec/CNV/step1/data/Chr$chr
+  cd /your-path/PoolSeq_Clec/CNV/step1/ # create subset bam file here
+
+for pool in LL # iterate across all pools
+  do
+
+     /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/${pool}_mapped_sorted.bam "${chr}" > ${pool}_${chr}_mapped.bam
+
+     step1d $chr $pool
+     step1e $chr $pool
+
+  done
+  cd ..
+done
+```
+
+
+### Step 2 & 3: Cluster distant and everted read-pairs within pools to identify deletions and tandem duplications
+
+**UPDATE 12/09/22 : re-run with script step2and3.R, with the following modifications:**
+- change parameter insertSizeDiffCutoff = 4*SD on .sh file
+- remove computation of normcov
+- remove events with frequency <2 *in both populations* (after matching between populations)
+
+
+
+Some of these scaffolds carried events with huge number of reads, which made the soft very slow.
+Those events seemed to be quite small (for example here, normalized read number in pop1 = 1711.1256, in pop2 = 1224.4709, size = 966631-966231 = 400)
+
+NW_019392726.1,966231,966631	NW_019392726.1,966231,966631	1711.1256	NW_019392726.1,966231,966583	1224.4709	2217279	281	3443522	281	200	486.655		Quantitative	T	5.16945 	-12.38629	everted	FP	FP
+
+So we decided to filter out those events based on size >=500 before running step2 and step3, since we will filter events >=1000 afterward.
+We had to do it on:
+- scaffold NW_019392715.1 for GL and LF
+- scaffold NW_019392726.1 for GL and LF
+- scaffold NW_019392782.1 for GL, LL and LF
+
+Here an example for NW_019392782.1:
+
+```{r}
+# Back to step 1 !
+# cd /your-path/PoolSeq_Clec/CNV/step1/data/ChrNW_019392782.1
+
+GL <- read.table("cNW_019392782.1pGLe.txt", fill=T)
+LF <- read.table("cNW_019392782.1pLFe.txt", fill=T)
+LL <- read.table("cNW_019392782.1pLLe.txt", fill=T)
+
+colnames(GL)=c("readid","scaffold","sl","el","strand1","qual1","seq1","seqqual1","sr","er","strand2","qual2","seq2","seqqual2")
+
+colnames(LF)=c("readid","scaffold","sl","el","strand1","qual1","seq1","seqqual1","sr","er","strand2","qual2","seq2","seqqual2") 
+colnames(LL)=c("readid","scaffold","sl","el","strand1","qual1","seq1","seqqual1","sr","er","strand2","qual2","seq2","seqqual2")
+
+library(dplyr)
+GL <- GL %>% 
+  rowwise() %>%
+  mutate(left_start = min(sl,el,er,sr))
+GL <- GL %>% 
+  rowwise() %>%
+  mutate(right_end = max(sl,el,er,sr))
+
+LF <- LF %>% 
+  rowwise() %>%
+  mutate(left_start = min(sl,el,er,sr))
+LF <- LF %>% 
+  rowwise() %>%
+  mutate(right_end = max(sl,el,er,sr))
+
+LL <- LL %>% 
+  rowwise() %>%
+  mutate(left_start = min(sl,el,er,sr))
+LL <- LL %>% 
+  rowwise() %>%
+  mutate(right_end = max(sl,el,er,sr))
+
+GL$size <- GL$right_end - GL$left_start
+summary(GL$size)
+dim(GL) # 2654487
+GL <- GL[GL$size>=500,]
+GL <- GL[!is.na(GL$size),] 
+dim(GL) # 10765
+
+LF$size <- LF$right_end - LF$left_start
+dim(LF) # 2407082
+LF <- LF[LF$size>=500,] 
+LF <- LF[!is.na(LF$size),] 
+dim(LF) # 10078
+
+LL$size <- LL$right_end - LL$left_start
+dim(LL) # 1303307
+LL <- LL[LL$size>=500,] 
+LL <- LL[!is.na(LL$size),] 
+dim(LL) # 4639
+
+# remove extra columns
+# and dowload it
+
+GL <- as.data.frame(GL)
+LF <- as.data.frame(LF)
+LL <- as.data.frame(LL)
+
+GL <- GL[,c(1:14)]
+LF <- LF[,c(1:14)]
+LL <- LL[,c(1:14)]
+
+write.table(GL, "cNW_019392782.1pGLe_cut.txt", quote=F, sep="\t", row.names=F, col.names=F)
+write.table(LF, "cNW_019392782.1pLFe_cut.txt", quote=F, sep="\t", row.names=F, col.names=F)
+write.table(LL, "cNW_019392782.1pLLe_cut.txt", quote=F, sep="\t", row.names=F, col.names=F)
+
+# then re-do step 2 & 3 on those cropped files
+```
+
+
+Output file contains:
+- The coordinates of the cluster, comma-separated.
+- The coordinates of the cluster found in pool 1 ("NA" if the cluster was only found in pool 2)
+- The (corrected) *number of read pairs supporting the event in pool 1* (0 if only found in pool 2)
+- The coordinates found in pool 2 ("NA" if the cluster was only found in pool 1)
+- The (corrected) *number of read pairs supporting the event in pool 2* (0 if only found in pool 1)
+
+> !Warning! everted file has right format, but not the other:
+
+head /your-path/PoolSeq_Clec/CNV/step3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_everted.tsv
+NW_019392721.1,3595,85423	NW_019392721.1,3595,85423	0.0	NW_019392721.1,3595,85423	6.0
+
+head /your-path/PoolSeq_Clec/CNV/step3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_distant.tsv
+30419,30483,31176,31325,907,23829938
+> We should delete those lines before lines at the right format:
+
+```{bash}
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds) 
+do
+grep -o 'N.*' /your-path/PoolSeq_Clec/CNV/step3/data/comparison1/c${chr}PLLvsPLF_distant.tsv > /your-path/PoolSeq_Clec/CNV/step3/data/comparison1/c${chr}PLLvsPLF_distant_clean.tsv
+done
+```
+
+UPDATE 09/09: while using step2and3, we have to remove small events in following scaffolds (as shown line 365) before re-running it (error "out of memory"):
+NW_019392706.1, NW_019392715.1, NW_019392726.1, NW_019392782.1, NW_019392787.1, NW_019392930.1, and NW_019392955.1
+Then, re-run it but with the following modified command:
+step2and3.R c${chr}p${poolA}e_cut.txt c${chr}p${poolB}e_cut.txt $normConstA $normConstB $insertSizeDiffCutoff_popA $insertSizeDiffCutoff_popB $distanceCutoff c${chr}P${poolA}_everted_cluster.tsv c${chr}P${poolB}_everted_cluster.tsv c${chr}P${poolA}vsP${poolB}_everted.tsv
+
+
+### Step 4: Calculate relative read depth differences
+
+```{bash}
+mkdir /your-path/PoolSeq_Clec/CNV/step4
+mkdir /your-path/PoolSeq_Clec/CNV/step4/data
+mkdir /your-path/PoolSeq_Clec/CNV/step4/data/comparison1
+```
+
+step4_comp1.sh
+
+```{bash}
+#!/bin/bash
+#SBATCH --cpus-per-task=1
+#SBATCH --mem 1G
+#SBATCH -t 10:00:00
+#SBATCH -e /your-path/PoolSeq_Clec/CNV/step4_comp1.err
+#SBATCH -o /your-path/PoolSeq_Clec/CNV/step4_comp1.out
+#SBATCH -J Genome_Cimex_lectularius
+
+#Implement step4 (d and e) for comparisons 10 and 11 (the two control comparisons)
+
+function step4() {
+chr=$1
+comparison=$2
+
+# Read in the masked-regions file for the relevant chromosome (e.g repeats)
+MaskedRegionsFile=/your-path/PoolSeq_Clec/CNV/bed_files/Cimex_lectularius_TE_Chr${chr}.bed
+
+# Define comparisons
+if [[ ${comparison} -eq 1 ]]; then # Focal comparison 1
+  poolA=LL
+  poolB=LF
+elif [[ ${comparison} -eq 2 ]]; then # Control comparison 1
+  poolA=LL
+  poolB=GL 
+elif [[ ${comparison} -eq 3 ]]; then # Focal comparison 2
+  poolA=LL
+  poolB=SF
+elif [[ ${comparison} -eq 4 ]]; then # Control comparison 2
+  poolA=LF
+  poolB=SF
+elif [[ ${comparison} -eq 5 ]]; then
+  poolA=GL
+  poolB=LF
+elif [[ ${comparison} -eq 6 ]]; then
+  poolA=GL
+  poolB=SF
+# 10 = also control comparison 1
+# 11 = also control comparison 2
+fi
+
+# Read in the relevant .bam file
+ficBamA=/your-path/PoolSeq_Clec/CNV/step4/${poolA}_${chr}_mapped.bam
+ficBamB=/your-path/PoolSeq_Clec/CNV/step4/${poolB}_${chr}_mapped.bam
+
+# distant read-pair clusters
+python /your-path/PoolSeq_Clec/CNV/step4/step4_countReadPairsInCNV-KH-pySam.py \
+/your-path/PoolSeq_Clec/CNV/step3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_distant_clean.tsv \
+  $ficBamA $MaskedRegionsFile > /your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_Aonly_distant.tsv # this is an intermediate file
+
+python /your-path/PoolSeq_Clec/CNV/step4/step4_countReadPairsInCNV-KH-pySam.py \
+/your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_Aonly_distant.tsv \
+  $ficBamB $MaskedRegionsFile  > /your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_P${poolA}vsP${poolB}d_comp${comparison}_distant.tsv
+
+# everted read-pair clusters only
+python2 /your-path/PoolSeq_Clec/CNV/step4/step4_countReadPairsInCNV-KH-pySam.py \
+/your-path/PoolSeq_Clec/CNV/step3/data/comparison${comparison}/c${chr}P${poolA}vsP${poolB}_everted.tsv \
+  $ficBamA $MaskedRegionsFile > /your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_Aonly_everted.tsv # this is an intermediate file
+
+python2 /your-path/PoolSeq_Clec/CNV/step4/step4_countReadPairsInCNV-KH-pySam.py \
+/your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_Aonly_everted.tsv \
+  $ficBamB $MaskedRegionsFile  > /your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_P${poolA}vsP${poolB}d_comp${comparison}_everted.tsv
+
+# remove the relevant data at the end of this part of the loop
+rm -f   $ficBamA
+rm -f   $ficBamB
+}
+# comparison 1 (Our focal comparison 1), for example
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds)
+do
+  for comparison in 1 # only comparison 1 here
+  do
+    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LL_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/step4/LL_${chr}_mapped.bam
+    
+    /beegfs/data/soft/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/step4/LL_${chr}_mapped.bam
+    
+    /beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LF_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/step4/LF_${chr}_mapped.bam
+    
+    /beegfs/data/soft/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/step4/LF_${chr}_mapped.bam
+    
+    step4 $chr $comparison
+  done
+done
+```
+
+
+### Step 4.5: Append additional allele frequency information to each duplication and deletion event
+
+We kept the same comparison name as in step4 > so we replace "altname" with "comparison" in for example "~/step4/data/comparison${altname}/c${chr}_P${poolA}vsP${poolB}d_comp${altname}_distant.tsv"
+
+So first, we want to compute upper 95% threshold and lower 5% threshold for the *expected difference in
+read depth*, based on empirical sampling of the data:
+
+> thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Up90_allChr_C"${comparison}".tsv"
+> thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Lo10_allChr_C"${comparison}".tsv"
+
+We checked step3 output:
+
+For each comparison, we have an everted and a distant file with columns:
+V3 = The (corrected) number of read pairs supporting the event in pool 1 = LL (0 if only found in pool 2)
+V5 = The (corrected) number of read pairs supporting the event in pool 2 = LF (0 if only found in pool 2)
+
+quantile(cNW_019392721.1PLLvsPLF_everted$V3, probs=seq(0,1,0.01))
+
+To create random intervals per size class, we used bedtools, with the file GCF_000648675.2_Clec_2.1_genomic.txt which contains the name of the scaffolds and their size:
+
+mkdir random_window
+cd /your-path/PoolSeq_Clec/CNV
+
+```{bash}
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 500 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-500.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 1000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-1kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 2000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-2kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 5000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-5kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 8000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-8kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 10000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-10kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 20000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-20kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 30000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-30kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 40000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-40kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 50000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-50kb.txt
+
+# Added the 05/09/22
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 100000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-100kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 500000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-500kb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 1000000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-1Mb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 1500000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-1.5Mb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 2000000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-2Mb.txt
+
+/your-path/Tools/bedtools2/bin/bedtools random -seed 123456 -n 1000 -l 2500000 -g GCF_000648675.2_Clec_2.1_genomic.txt > /your-path/PoolSeq_Clec/CNV/random-wind/random-windows-2.5Mb.txt
+```
+
+Here, we created intervals of length 1500bp:
+
+NW_019392727.1	514869	516369	1	1500	-
+NW_019392833.1	711623	713123	2	1500	+
+
+We moved files in diff. directories:
+
+```{bash}
+for SizeClass in $(cat /your-path/PoolSeq_Clec/CNV/ListeSize)
+do 
+mkdir "${SizeClass}"
+done
+
+for SizeClass in $(cat /your-path/PoolSeq_Clec/CNV/ListeSize);
+do
+for file in ./random-windows-"${SizeClass}".txt;
+do 
+mv "${file}" "${SizeClass}"
+done
+done
+```
+
+We need one file per scaffold : 
+
+```{bash}
+cd /your-path/PoolSeq_Clec/CNV/random-wind/
+
+for SizeClass in $(cat /your-path/PoolSeq_Clec/CNV/ListeSize);
+do
+cd "${SizeClass}"
+for file in ./random-windows-*.txt;
+do 
+awk -F'\t' '{print > $1".txt"}' "${file}"
+cd ..
+done
+done
+```
+
+But we want it to be formatted like the output of step3:
+
+NW_019394230.1,43996,44176	NW_019394230.1,43996,44176	2	NW_019394230.1,43996,44176	2
+
+```{bash}
+for SizeClass in $(cat /your-path/PoolSeq_Clec/CNV/ListeSize);
+do
+cd $SizeClass
+for file in ./NW_*.txt;
+do 
+awk '{print $1","$2","$3"\t"$1","$2","$3"\t"$4"\t"$1","$2","$3"\t"$4}' $file > $file"2"
+done
+cd ..
+done
+```
+
+Faire tourner step4 sur :
+/your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/${chr}.txt2
+
+```{bash}
+#!/bin/bash
+#SBATCH --cpus-per-task=1
+#SBATCH --mem 1G
+#SBATCH -t 10:00:00
+#SBATCH -e /your-path/PoolSeq_Clec/CNV/step4_randomwind_comp1.err
+#SBATCH -o /your-path/PoolSeq_Clec/CNV/step4_randomwind_comp1.out
+#SBATCH -J Genome_Cimex_lectularius
+
+#Implement step4 (d and e) for comparisons 10 and 11 (the two control comparisons)
+
+function step4() {
+  chr=$1
+  comparison=$2
+  
+  # Read in the masked-regions file for the relevant chromosome (e.g repeats)
+  MaskedRegionsFile=/your-path/PoolSeq_Clec/CNV/bed_files/Cimex_lectularius_TE_Chr${chr}.bed
+  
+  # Define comparisons
+  if [[ ${comparison} -eq 1 ]]; then # Focal comparison 1
+  poolA=LL
+  poolB=LF
+  elif [[ ${comparison} -eq 2 ]]; then # Control comparison 1
+  poolA=LL
+  poolB=GL 
+  # 10 = also control comparison 1
+  # 11 = also control comparison 2
+  fi
+  
+  # Read in the relevant .bam file
+  ficBamA=/your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/${poolA}_${chr}_mapped.bam
+  ficBamB=/your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/${poolB}_${chr}_mapped.bam
+  
+  # everted read-pair clusters only
+  python2 /your-path/PoolSeq_Clec/CNV/step4/step4_countReadPairsInCNV-KH-pySam.py \
+  /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/${chr}.txt2 \
+  $ficBamA $MaskedRegionsFile > /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/${chr}_Aonly_random.tsv # this is an intermediate file
+  
+  python2 /your-path/PoolSeq_Clec/CNV/step4/step4_countReadPairsInCNV-KH-pySam.py \
+  /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/${chr}_Aonly_random.tsv \
+  $ficBamB $MaskedRegionsFile  > /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/${chr}_${poolA}vsP${poolB}_random.tsv
+  
+  # remove the relevant data at the end of this part of the loop
+  rm -f   $ficBamA
+  rm -f   $ficBamB
+  rm -f   ${ficBamA}.bai
+  rm -f   ${ficBamB}.bai
+}
+# comparison 1 (Our focal comparison 1), for example
+for SizeClass in $(cat /your-path/PoolSeq_Clec/CNV/ListeSize)
+do
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds)
+do
+for comparison in 1 # only comparison 1 here
+do
+/beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LL_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LL_${chr}_mapped.bam
+
+/beegfs/data/soft/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LL_${chr}_mapped.bam
+
+/beegfs/data/soft/samtools-1.10/bin/samtools view --threads 8 -b /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP/LF_mapped_sorted.bam "${chr}" > /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LF_${chr}_mapped.bam
+
+/beegfs/data/soft/samtools-1.10/bin/samtools index /your-path/PoolSeq_Clec/CNV/random-wind/${SizeClass}/LF_${chr}_mapped.bam
+
+step4 $chr $comparison
+done
+done
+done
+```
+
+Then, merge all files per scaffold into one:
+
+```{bash}
+cat NW_019*.1_LLvsPLF_random.tsv > LLvsPLF_random.txt
+```
+
+We then compute the read depth ratio as in step4.5 (12th field):
+(We add conditions in (1) and (2) to avoid the case "divided by 0" which results in fatal error)
+
+(1) calculate the per-nucleotide read depth in pool A if the CNV was present in A:
+
+    Wsize=$7; depth=$6; if ($7 != 0) print (depth/Wsize)*100 ; else if ($7 == 0) print "0"
+    (depth/Wsize)*100 > $1
+    
+(2) calculate the per-nucleotide read depth in pool B if the CNV was present in B
+
+    Wsize=$7; depth=$8;  if ($7 != 0) print (depth/Wsize)*100 ; else if ($7 == 0) print "0"
+    (depth/Wsize)*100 > $2
+  
+(3) compute the ratio A/B
+
+    if ($2 != 0) print $1/$2; else if ($2 == 0) print "inf"  
+
+Do this computation on R:
+
+```{r}
+R
+test <- read.table("LLvsPLF_random.txt")
+test$ratio <- (test$V6/test$V7)/(test$V8/test$V9)
+quantile(test$ratio,c(0.25,0.75), na.rm=T)
+q()
+n
+```
+
+cd /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95
+
+```{r}
+# R
+LL1kb <- read.table("out-cov-LL-1kb.txt")
+LF1kb <- read.table("out-cov-LF-1kb.txt")
+
+colnames(LL1kb) <- c("rname","startpos","endpos","numreads","covbases")
+colnames(LF1kb) <- c("rname","startpos","endpos","numreads","covbases")
+
+LL1kb$ratio <- (LL1kb$numreads/LL1kb$covbases*100)/(LF1kb$numreads/LF1kb$covbases*100)
+quantile(LL1kb$ratio, na.rm=T, prob=seq(0,1,0.05))
+
+write.table(LL1kb, "LL1kb.txt", quote=F)
+```
+
+  V1             V2     V3     V4      ratio
+1 NW_019392727.1 514869 515869 13.5235 -2.3786
+2 NW_019392833.1 711623 712623 14.4935 -5.6963
+3 NW_019392920.1 148931 149931 15.7602 -1.1189
+4 NW_019392813.1 181956 182956 14.7433 -7.989
+5 NW_019392737.1 1108705 1109705 16.7043 -12.1468
+6 NW_019392689.1 912537 913537 12.6234 -3.4615
+
+Or we can define the 5% and 95% quantiles with:
+
+```{bash}
+sort -n -k 7 LL30kb.txt  | awk '{all[NR] = $7} END{print all[int(NR*0.95)]}' > q95_30kb
+sort -n -k 7 LL30kb.txt  | awk '{all[NR] = $7} END{print all[int(NR*0.05)]}' > q5_30kb
+```
+
+We can also define the 10% and 90% quantiles :
+
+```{bash}
+sort -n -k 7 LL30kb.txt  | awk '{all[NR] = $7} END{print all[int(NR*0.90)]}' > q90_30kb
+sort -n -k 7 LL30kb.txt  | awk '{all[NR] = $7} END{print all[int(NR*0.10)]}' > q10_30kb
+```
+
+To do this over all files:
+
+```{bash}
+for SizeClass in $(cat /your-path/PoolSeq_Clec/CNV/ListeSize)
+do
+/beegfs/data/soft/R-4.0.5/bin/Rscript /your-path/PoolSeq_Clec/CNV/compute-quantiles-random-windows.R /your-path/PoolSeq_Clec/CNV/result-cov-random/random-windows-"$SizeClass".txt_covLL_ok.txt /your-path/PoolSeq_Clec/CNV/result-cov-random/random-windows-"$SizeClass".txt_covLF_ok.txt /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/quantiles_"$SizeClass".txt
+done
+```
+
+Then, we can manually create a file with all categories:
+
+nano C1_PERCENTILES.txt
+
+size    q5        q10       q90       q95
+500     0.5000000 0.5789474 1.2178744 1.3539848 
+1000    0.5691101 0.6234683 1.0826484 1.1762483
+2000    0.6414445 0.6779114 0.9764501 1.0391094 
+5000    0.7016958 0.7308842 0.9252077 0.9553209 
+8000    0.7232878 0.7442450 0.9002137 0.9256592 
+10000   0.7322942 0.7519393 0.8899569 0.9110690 
+20000   0.7583027 0.7717086 0.8676708 0.8816779 
+30000   0.7669041 0.7790163 0.8595701 0.8713869 
+40000   0.7704131 0.7829543 0.8547581 0.8661766 
+50000   0.7780854 0.7889317 0.8509359 0.8622906 
+100000    0.7873172 0.7943371 0.8390067 0.8474167 
+500000    0.8007618 0.8054869 0.8269708 0.8303853 
+1000000   0.8056730 0.8079778 0.8246806 0.8272439 
+1500000   0.8057133 0.8080424 0.8223257 0.8245331 
+2000000   0.8068726 0.8093561 0.8209310 0.8225129 
+2500000   0.8053877 0.8087843 0.8197390 0.8212512 
+
+Create threshold files:
+
+```{bash}
+awk '{print $1,$2}' C1_PERCENTILES.txt > /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C1/Lo5_allChr_C1.tsv
+
+awk '{print $1,$3}' C1_PERCENTILES.txt > /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C1/Lo10_allChr_C1.tsv
+
+awk '{print $1,$4}' C1_PERCENTILES.txt > /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C1/Up90_allChr_C1.tsv
+
+awk '{print $1,$5}' C1_PERCENTILES.txt > /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C1/Up95_allChr_C1.tsv
+```
+
+> We created several directory
+
+```{bash}
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5/data
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5/data/comparison1
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/
+mkdir /your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C1
+```
+
+> We also added the line in the code about MNSI which was missing.
+
+```{bash}
+#!/bin/bash
+#SBATCH --cpus-per-task=1
+#SBATCH --mem 1G
+#SBATCH -t 10:00:00
+#SBATCH -e /your-path/PoolSeq_Clec/CNV/step4pt5_comp1.err
+#SBATCH -o /your-path/PoolSeq_Clec/CNV/step4pt5_comp1.out
+#SBATCH -J Genome_Cimex_lectularius
+
+function step4pt5(){
+
+    chr=$1
+    comparison=$2
+
+    # Define the pools relevant to the specified comparison
+
+    if [[ ${comparison} -eq 1 ]]; then # Focal comparison 1
+        poolA=LL
+        poolB=LF
+    elif [[ ${comparison} -eq 2 ]]; then # Focal comparison 2
+        poolA=LL
+        poolB=GL
+    elif [[ ${comparison} -eq 3 ]]; then # Control comparison 1
+        poolA=LL
+        poolB=SF
+    elif [[ ${comparison} -eq 4 ]]; then # Control comparison 2
+        poolA=LF
+        poolB=SF
+    elif [[ ${comparison} -eq 5 ]]; then
+        poolA=GL
+        poolB=LF
+    elif [[ ${comparison} -eq 6 ]]; then
+        poolA=GL
+        poolB=SF
+    fi
+    
+    ### EVERTED READS (DUPLICATIONS)
+
+    ## Assign size window categories to each CNV
+
+    cut -f7 /your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_P${poolA}vsP${poolB}d_comp${comparison}_everted.tsv | awk -F $'\t' 'BEGIN {OFS = FS} \
+     {if ($1 < 750) print "500"; \
+     else if ($1 >= 750 && $1 < 1500) print "1000"; \
+     else if ($1 >= 1500 && $1 < 3500) print "2000"; \
+     else if ($1 >= 3500 && $1 < 6500) print "5000"; \
+     else if ($1 >= 6500 && $1 < 9000) print "8000";\
+     else if ($1 >= 9000 && $1 < 15000) print "10000";\
+     else if ($1 >= 15000 && $1 < 25000) print "20000";\
+     else if ($1 >= 25000 && $1 < 35000) print "30000";\
+     else if ($1 >= 35000 && $1 < 45000) print "40000";\
+     else if ($1 >= 45000 && $1 < 75000) print "50000";\
+     else if ($1 >= 75000 && $1 < 300000) print "100000";\
+     else if ($1 >= 300000 && $1 < 750000) print "500000";\
+     else if ($1 >= 750000 && $1 < 1250000) print "1000000";\
+     else if ($1 >= 1250000 && $1 < 1750000) print "1500000";\
+     else if ($1 >= 1750000 && $1 < 2250000) print "2000000";\
+     else if ($1 >= 2250000) print "2500000"}' > windowSizes_Chr${chr}_Pools${poolA}vs${poolB}_e.tsv
+
+    ## Append the 10th field with window category information
+    paste /your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_P${poolA}vsP${poolB}d_comp${comparison}_everted.tsv \
+    windowSizes_Chr${chr}_Pools${poolA}vs${poolB}_e.tsv > S4_Window_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    ## Append the 11th field with the difference in number of supporting inserts (DiffSuppIns):
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {print $3-$5 }' S4_Window_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > DSI_e.tsv
+    paste S4_Window_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv DSI_e.tsv > S4_DSI_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+     ## Calculate the read depth ratio and append the 12th field with this value
+     
+    # calculate the per-nucleotide read depth in pool A if the CNV was present in A
+    awk -F $'\t' 'BEGIN {OFS = FS}{Wsize=$7; depth=$6; if ($7 != 0) print (depth/Wsize)*100 ; else if ($7 == 0) print "0"}' S4_DSI_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv  > PerNtDepthA_e.tsv
+    # calculate the per-nucleotide read depth in pool B if the CNV was present in B
+    awk -F $'\t' 'BEGIN {OFS = FS}{Wsize=$7; depth=$8; if ($7 != 0) print (depth/Wsize)*100 ; else if ($7 == 0) print "0"}' S4_DSI_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv  > PerNtDepthB_e.tsv
+    paste PerNtDepthA_e.tsv PerNtDepthB_e.tsv > ObsDepth_e.tsv
+    awk -F $'\t' 'BEGIN {OFS = FS}{if ($2 != 0) print $1/$2; else if ($2 == 0) print "inf" }' ObsDepth_e.tsv > ObsRDR_e.tsv
+    paste S4_DSI_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv ObsRDR_e.tsv > S4_ObsRDR_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    ## Assign a status (qualitative difference or quantitative difference) to each CNV and apppend the 13th field with this status
+    awk -F $'\t' 'BEGIN {OFS = FS}{if ($2 != "NA" && $4 != "NA") print "Quantitative"; else if ($2 = "NA" || $4 = "NA") print "Qualitative"}' \
+    S4_ObsRDR_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > QQ_e.tsv
+    paste S4_ObsRDR_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv QQ_e.tsv > S4_QQ_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    # Qualitative/Quantitative status is now the 13th field
+
+# For clusters of everted reads, identify those which have at least 3 supporting reads  (MNSI>3) and append the 14th field with this status
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($2 != "NA" && $4 != "NA" && ($3 <= 3 || $5 <= 3)) print "F"; \
+    else if ($2 != "NA" && $4 != "NA" && ($3 >= 3 || $5 >= 3)) print "T"; \
+    else if ($2 != "NA" && $3 <= 3) print "F";\
+    else if ($2 != "NA" && $3 >= 3) print "T"; \
+    else if ($4 != "NA" && $5 <= 3) print "F";\
+    else if ($4 != "NA" && $5 >= 3) print "T"}' S4_QQ_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > MNSI_everted.tsv
+    paste S4_QQ_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv MNSI_everted.tsv > S4_MNSI_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    ## Read in the upper 95% read depth ratio threshold and assign this value to the 15th field
+
+    infile="S4_MNSI_everted_Chr"${chr}"_Pools"${poolA}"vs"${poolB}".tsv"
+    outfile="S4_MNSI_everted_Chr"${chr}"_Pools"${poolA}"vs"${poolB}"_Upper.tsv"
+    thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Up90_allChr_C"${comparison}".tsv"
+
+    awk -v outf=$outfile -F $'\t' 'BEGIN {OFS = FS}  { if (NR == FNR ) {d[$1]=$2}
+    else {
+    print $0, d[$10] > outf
+    }}
+    ' $thresholdsfile $infile
+
+    # 16th field is lower threshold
+
+    infile="S4_MNSI_everted_Chr"${chr}"_Pools"${poolA}"vs"${poolB}"_Upper.tsv"
+    outfile="S4_MNSI_everted_Chr"${chr}"_Pools"${poolA}"vs"${poolB}"_Lower.tsv"
+    thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Lo10_allChr_C"${comparison}".tsv"
+
+    awk -v outf=$outfile -F $'\t' 'BEGIN {OFS = FS} { if (NR == FNR ) {d[$1]=$2}
+    else {
+    print $0, d[$10] > outf
+    }}
+    ' $thresholdsfile $infile
+
+    # 17th field labels Everted reads
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($14 == "T" || $14 == "F") print "everted"}' S4_MNSI_everted_Chr${chr}_Pools${poolA}vs${poolB}_Lower.tsv > EVERTED.tsv
+    paste S4_MNSI_everted_Chr${chr}_Pools${poolA}vs${poolB}_Lower.tsv EVERTED.tsv > S4_labeled_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+
+    # 18th field labels legitimate tandem duplications that belong to a specific pool (DUP, for everted reads), legitimate deletions (DEL, for distant reads) and false positives (FP)
+
+    # 18th field labels legitimate tandem duplications (DUP) in to a specific pool (A or B) and false positives (FP).
+    # FPs are generated when the DiffSuppIns value is not in the same 'direction' as the read depth ratio.
+    # If there is a duplication in pool A, there should be more everted read
+    # pairs in A compared to B and a higher read depth in A compared to B (and vice versa for b).
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($11 > 0 && $12 > 1) print "DUP_A"; \
+    else if ($11 < 0 && $12 < 1) print "DUP_B"; \
+    else print "FP"}' S4_labeled_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > S4_CNVAB_e.txt
+
+    paste S4_labeled_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv S4_CNVAB_e.txt > S4_CNVAB_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    # 19th field labels legitimate tandem duplications in general
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($18 == "DUP_A" || $18 == "DUP_B") print "DUP"; else print "FP"}' S4_CNVAB_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv > DUP_FP.tsv
+    paste S4_CNVAB_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv DUP_FP.tsv > S4_appended_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    # remove intermediate files
+
+    rm -rf windowSizes_Chr${chr}_Pools${poolA}vs${poolB}_e.tsv
+    rm -rf S4_Window_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf DSI_e.tsv
+    rm -rf S4_DSI_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf PerNtDepthA_e.tsv
+    rm -rf PerNtDepthB_e.tsv
+    rm -rf ObsDepth_e.tsv
+    rm -rf ObsRDR_e.tsv
+    rm -rf EVERTED.tsv
+    rm -rf S4_ObsRDR_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf UpThreshold99.tsv
+    rm -rf UpThreshold99.tsv
+    rm -rf MNSI_everted.tsv
+    rm -rf QQ_e.tsv
+    rm -rf S4_QQ_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_MNSI_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_MNSI_everted_Chr${chr}_Pools${poolA}vs${poolB}_Upper.tsv
+    rm -rf S4_MNSI_everted_Chr${chr}_Pools${poolA}vs${poolB}_Lower.tsv
+    rm -rf S4_labeled_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_CNVAB_e.txt
+    rm -rf S4_CNVAB_everted_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf DUP_FP.tsv
+
+    ### DISTANT READS (DELETIONS)
+
+    ## Assign size window categories to each CNV
+    cut -f7 /your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_P${poolA}vsP${poolB}d_comp${comparison}_distant.tsv | awk -F $'\t' 'BEGIN {OFS = FS} \
+     {if ($1 < 750) print "500"; \
+     else if ($1 >= 750 && $1 < 1500) print "1000"; \
+     else if ($1 >= 1500 && $1 < 3500) print "2000"; \
+     else if ($1 >= 3500 && $1 < 6500) print "5000"; \
+     else if ($1 >= 6500 && $1 < 9000) print "8000";\
+     else if ($1 >= 9000 && $1 < 15000) print "10000";\
+     else if ($1 >= 15000 && $1 < 25000) print "20000";\
+     else if ($1 >= 25000 && $1 < 35000) print "30000";\
+     else if ($1 >= 35000 && $1 < 45000) print "40000";\
+     else if ($1 >= 45000 && $1 < 75000) print "50000";\
+     else if ($1 >= 75000 && $1 < 300000) print "100000";\
+     else if ($1 >= 300000 && $1 < 750000) print "500000";\
+     else if ($1 >= 750000 && $1 < 1250000) print "1000000";\
+     else if ($1 >= 1250000 && $1 < 1750000) print "1500000";\
+     else if ($1 >= 1750000 && $1 < 2250000) print "2000000";\
+     else if ($1 >= 2250000) print "2500000"}' > windowSizes_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    ## Append the 10th field with window category information
+    paste /your-path/PoolSeq_Clec/CNV/step4/data/comparison${comparison}/c${chr}_P${poolA}vsP${poolB}d_comp${comparison}_distant.tsv \
+    windowSizes_Chr${chr}_Pools${poolA}vs${poolB}.tsv > S4_Window_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+     ## Append the 11th field with the difference in number of supporting inserts (DiffSuppIns):
+    awk -F $'\t' 'BEGIN {OFS = FS}{print $3-$5 }' S4_Window_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv > DSI.tsv
+    paste S4_Window_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv DSI.tsv > S4_DSI_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    ## Calculate the read depth ratio and append the 12th field with this value
+
+    # calculate the per-nucleotide read depth in pool A if the CNV was present in A
+    awk -F $'\t' 'BEGIN {OFS = FS}{Wsize=$7; depth=$6; if ($7 != 0) print (depth/Wsize)*100 ; else if ($7 == 0) print "0"}' S4_DSI_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv  > PerNtDepthA.tsv
+    # calculate the per-nucleotide read depth in pool B if the CNV was present in B
+    awk -F $'\t' 'BEGIN {OFS = FS}{Wsize=$7; depth=$8; if ($7 != 0) print (depth/Wsize)*100 ; else if ($7 == 0) print "0"}' S4_DSI_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv  > PerNtDepthB.tsv
+    paste PerNtDepthA.tsv PerNtDepthB.tsv > ObsDepth.tsv
+    awk -F $'\t' 'BEGIN {OFS = FS}{if ($2 != 0) print $1/$2; else if ($2 == 0) print "inf" }' ObsDepth.tsv > ObsRDR.tsv
+    paste S4_DSI_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv ObsRDR.tsv > S4_ObsRDR_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    # Assign a status (qualitative difference or quantitative difference) to each CNV and apppend the 13th field with this status
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($2 != "NA" && $4 != "NA") print "Quantitative"; else if ($2 = "NA" || $4 = "NA") print "Qualitative"}' \
+    S4_ObsRDR_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv > QQ.tsv
+    paste S4_ObsRDR_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv QQ.tsv > S4_QQ_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+
+    # For clusters of distant reads, identify those which have at least 3 supporting reads  (MNSI>3) and append the 14th field with this status
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($2 != "NA" && $4 != "NA" && ($3 <= 3 || $5 <= 3)) print "F"; \
+    else if ($2 != "NA" && $4 != "NA" && ($3 >= 3 || $5 >= 3)) print "T"; \
+    else if ($2 != "NA" && $3 <= 3) print "F";\
+    else if ($2 != "NA" && $3 >= 3) print "T"; \
+    else if ($4 != "NA" && $5 <= 3) print "F";\
+    else if ($4 != "NA" && $5 >= 3) print "T"}' S4_QQ_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv > MNSI_distant.tsv
+    paste S4_QQ_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv MNSI_distant.tsv > S4_MNSI_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    # Read in the upper threshold  and assign this value to the 15th field
+
+    infile="S4_MNSI_distant_Chr"${chr}"_Pools"${poolA}"vs"${poolB}".tsv"
+    outfile="S4_MNSI_distant_Chr"${chr}"_Pools"${poolA}"vs"${poolB}"_Upper.tsv"
+    thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Up90_allChr_C"${comparison}".tsv"
+
+    awk -v outf=$outfile -F $'\t' 'BEGIN {OFS = FS}  { if (NR == FNR ) {d[$1]=$2}
+    else {
+    print $0, d[$10] > outf
+    }}
+    ' $thresholdsfile $infile
+
+    # 16th field is lower threshold
+
+    infile="S4_MNSI_distant_Chr"${chr}"_Pools"${poolA}"vs"${poolB}"_Upper.tsv"
+    outfile="S4_MNSI_distant_Chr"${chr}"_Pools"${poolA}"vs"${poolB}"_Lower.tsv"
+    thresholdsfile="/your-path/PoolSeq_Clec/CNV/step4pt5/data/RDR_95/C"${comparison}"/Lo10_allChr_C"${comparison}".tsv"
+
+    awk -v outf=$outfile -F $'\t' 'BEGIN {OFS = FS}  { if (NR == FNR ) {d[$1]=$2}
+    else {
+    print $0, d[$10] > outf
+    }}
+    ' $thresholdsfile $infile
+
+    # 17th field labels Distant reads
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($14 == "T" || $14 == "F") print "distant"}' S4_MNSI_distant_Chr${chr}_Pools${poolA}vs${poolB}_Lower.tsv > distant.tsv
+    paste S4_MNSI_distant_Chr${chr}_Pools${poolA}vs${poolB}_Lower.tsv distant.tsv > S4_labeled_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+
+    # 18th field labels legitimate tandem deletions (DEL) in to a specific pool (A or B) and false positives (FP).
+    # FPs are generated when the DiffSuppIns value is not in the same 'direction' as the read depth ratio.
+    # If there is a deletion in pool A, there should be more distant read
+    # pairs in A compared to B and a lower read depth in A compared to B (and vice versa for b).
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($11 > 0 && $12 < 1) print "DEL_A"; \
+    else if ($11 < 0 && $12 > 1) print "DEL_B"; \
+    else print "FP"}' S4_labeled_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv > CNVAB2.tsv
+
+    paste S4_labeled_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv CNVAB2.tsv > S4_CNVAB_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+
+    # 19th field labels each as DEL (legitimate deletion) vs FP (false positive)
+
+    awk -F $'\t' 'BEGIN {OFS = FS} {if ($18 == "DEL_A" || $18 == "DEL_B") print "DEL"; else print "FP"}' S4_CNVAB_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv > DEL_FP.tsv
+    paste S4_CNVAB_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv DEL_FP.tsv > S4_appended_distant_Chr${chr}_comparison${comparison}.tsv
+
+        # All intermediate files are removed
+    rm -rf windowSizes_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_Window_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf DSI.tsv
+    rm -rf S4_DSI_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf PerNtDepthA.tsv
+    rm -rf PerNtDepthB.tsv
+    rm -rf ObsDepth.tsv
+    rm -rf ObsRDR.tsv
+    rm -rf S4_ObsRDR_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf UpThreshold99.tsv
+    rm -rf MNSI_distant.tsv
+    rm -rf distant.tsv
+    rm -rf QQ.tsv
+    rm -rf S4_QQ_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_MNSI_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_MNSI_distant_Chr${chr}_Pools${poolA}vs${poolB}_Upper.tsv
+    rm -rf S4_MNSI_distant_Chr${chr}_Pools${poolA}vs${poolB}_Lower.tsv
+    rm -rf S4_labeled_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf S4_CNVAB_distant_Chr${chr}_Pools${poolA}vs${poolB}.tsv
+    rm -rf DEL_FP.tsv
+    rm -rf CNVAB2.tsv
+
+}
+
+## focal comparisons
+# comparison 1
+cd /your-path/PoolSeq_Clec/CNV/step4pt5/data/comparison1
+for chr in $(cat /your-path/PoolSeq_Clec/CNV/list_scaffolds)
+do
+ step4pt5 $chr 1
+done
+cat S4_appended_distant_Chr*.tsv > S4_distant_c1.tsv # collate all DEL output
+cat S4_appended_everted_Chr*.tsv > S4_everted_c1.tsv # collate all DUP output
+```
+
+We can do some analyzes on R.
+
+Deletions :
+
+```{r}
+del <- read.table(file="S4_distant_c1.tsv", fill=T) # 65 554
+colnames(del) <- c("Coords","CoordsPool1","NormReadsPool1","CoordsPool2","NormReadsPool2","ReadDepthPool1","SizePool1","ReadDepthPool2","SizePool2","SizeClass","DiffSuppIns","ReadDepthRatio","Status","MNSI","UpperThreshold","LowerThreshold","Type","TypeDel","extra")
+
+# To correct manually...
+del_not_ok <- del[del$LowerThreshold=="distant",] # 51 865
+
+del_not_ok$extra <- del_not_ok$TypeDel
+del_not_ok$TypeDel <- del_not_ok$Type
+del_not_ok$Type <- del_not_ok$LowerThreshold
+del_not_ok$LowerThreshold <- del_not_ok$UpperThreshold
+del_not_ok$UpperThreshold <- del_not_ok$MNSI
+del_not_ok$MNSI <- del_not_ok$Status
+del_not_ok$Status <- del_not_ok$ReadDepthRatio
+
+del_not_ok$ReadDepthRatio <- (del_not_ok$ReadDepthPool1/del_not_ok$SizePool1*100)/
+  (del_not_ok$ReadDepthPool2/del_not_ok$SizePool2*100)
+
+del <- del[del$LowerThreshold!="distant",] # 13 209
+
+del <- rbind(del,del_not_ok) # 65 554 again
+# All good !
+rm(del_not_ok)
+
+# We filter out mitochondrial genome
+# Split dups' first column
+library(stringr)
+del[c('scaffold', 'start_event', 'end_event')] <- str_split_fixed(del$Coords, ',', 3)
+del <- del[del$scaffold != "NC_030043.1",] #  65 512
+
+del <- del[del$SizeClass >= 1000,] # 9 319
+
+summary(del$TypeDel)
+```
+
+Duplications :
+
+```{r}
+dup <- read.table(file="S4_everted_c1.tsv", fill=T) # 26 808 for S4_everted_c1.tsv 
+colnames(dup) <- c("Coords","CoordsPool1","NormReadsPool1","CoordsPool2","NormReadsPool2","ReadDepthPool1","SizePool1","ReadDepthPool2","SizePool2","SizeClass","DiffSuppIns","ReadDepthRatio","Status","MNSI","UpperThreshold","LowerThreshold","Type","TypeDup","extra")
+
+library(stringr)
+dup[c('scaffold', 'start_event', 'end_event')] <- str_split_fixed(dup$Coords, ',', 3)
+dup <- dup[dup$scaffold != "NC_030043.1",] #  26 790
+
+# We then filter out small events (<= 500) and re-do a barplot
+
+dup <- dup[dup$SizeClass >= 5000,] # 3 725
+
+summary(as.factor(dup$TypeDup)) # only dupB if we do DiffSupIns threshold
+summary(dup_inv$TypeDup)
+summary(as.factor(dup_save_bis$TypeDup)) # only dupB if we do DiffSupIns threshold
+
+
+CNV = c("DUP_TAND","DUP_INV") # MAJ DUP_INV : 14/09
+in_LL = c(13,13)
+in_LF = c(2058,2871)
+FP = c(1654,2238)
+
+data<-cbind(in_LF,in_LL,FP)
+
+barplot(t(data),beside=F,col=c("chartreuse3","darkgoldenrod1","cyan3"),ylab="Number of events",
+        names=CNV,las=3,horiz=F,
+        ylim=c(0,6000),xlim=c(0,6),space=0.1)
+legend(x="topright", legend=c("Events in London Field","Events in London Lab","False positive"),
+       cex=0.9,fill=c("chartreuse3","darkgoldenrod1","cyan3"),bty="n")     
+
+dup_save <- merge(dup, dup_inv, by=colnames(dup), all.x=T, all.y=T) # 8 847
+
+# We want to recover the "real" Reads number
+# normConstLF <- read.table(file="normConstLF_comp1.txt")
+# normConstLL <- read.table(file="normConstLL_comp1.txt")
+# dup_save <- merge(dup_save, normConstLF, all.x=T, by.x="scaffold", by.y="V2")
+# dup_save <- merge(dup_save, normConstLL, all.x=T, by.x="scaffold", by.y="V2")
+# colnames(dup_save)[23] <- "norm_LF"
+# colnames(dup_save)[24] <- "norm_LL"
+# dup_save$ReadsPool1 <- dup_save$NormReadsPool1/dup_save$norm_LL
+# dup_save$ReadsPool2 <- dup_save$NormReadsPool2/dup_save$norm_LF
+
+######## SAVE HERE ######## 
+library(xlsx)
+write.xlsx(dup_save, file="dup_save.xls", 
+           row.names = F)
+########################## 
+```
+
+Then, we decided to compute a frequency for events.
+We computed coverage onto the positions of event borders.
+
+First, we extracted position of resist_final table and formated it for samtools
+```{r}
+library(xlsx)
+dup_save <- read.xlsx(file="dup_save.xls", sheetName = "Sheet1", header = T)
+
+dup_save$start_event <- as.numeric(as.character(dup_save$start_event))
+dup_save$end_event <- as.numeric(as.character(dup_save$end_event))
+
+dup_save$start_event_bis <- dup_save$start_event+150
+dup_save$end_event_bis <- dup_save$end_event-150
+
+dup_save$samtools_start <- paste0(dup_save$scaffold, ":", dup_save$start_event, "-",
+                                  dup_save$start_event_bis)
+dup_save$samtools_end <- paste0(dup_save$scaffold, ":", dup_save$end_event_bis, "-",
+                                  dup_save$end_event)
+dup_samtools_start <- dup_save$samtools_start
+dup_samtools_end <- dup_save$samtools_end
+
+write.table(dup_samtools_start, file="dup_samtools_start.txt", 
+           row.names = F, quote=F, col.names = F)
+write.table(dup_samtools_end, file="dup_samtools_end.txt", 
+           row.names = F, quote=F, col.names = F)
+```
+
+Then, we simply used samtools:
+We want to keep rname,startpos,endpos,numreads,covbases > -f1,2,3,4,5  
+
+```{bash}
+cd /your-path/PoolSeq_Clec/Mapped_GCF/SEP_MAP_UNMAP
+
+while read line;
+do 
+/beegfs/data/varaldi/miniconda3/bin/samtools coverage -r $line LL_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
+done < /your-path/PoolSeq_Clec/CNV/dup_samtools_start.txt > /your-path/PoolSeq_Clec/CNV/dup_coverage_start_LL.txt
+
+while read line;
+do 
+/beegfs/data/varaldi/miniconda3/bin/samtools coverage -r $line LF_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
+done < /your-path/PoolSeq_Clec/CNV/dup_samtools_start.txt > /your-path/PoolSeq_Clec/CNV/dup_coverage_start_LF.txt
+
+while read line;
+do 
+/beegfs/data/varaldi/miniconda3/bin/samtools coverage -r $line LL_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
+done < /your-path/PoolSeq_Clec/CNV/dup_samtools_end.txt > /your-path/PoolSeq_Clec/CNV/dup_coverage_end_LL.txt
+
+while read line;
+do 
+/beegfs/data/varaldi/miniconda3/bin/samtools coverage -r $line LF_mapped_sorted.bam | grep ^# -v | cut -f1,2,3,4,5
+done < /your-path/PoolSeq_Clec/CNV/dup_samtools_end.txt > /your-path/PoolSeq_Clec/CNV/dup_coverage_end_LF.txt
+```
+
+```{r}
+dup_coverage_start_LL <- read.table(file="dup_coverage_start_LL.txt")
+dup_coverage_end_LL <- read.table(file="dup_coverage_end_LL.txt")
+dup_coverage_start_LF <- read.table(file="dup_coverage_start_LF.txt")
+dup_coverage_end_LF <- read.table(file="dup_coverage_end_LF.txt")
+
+colnames(dup_coverage_start_LL) <- c("rname","startpos","endpos","numreads_start_LL","covbases_start_LL")
+colnames(dup_coverage_end_LL) <- c("rname","startpos","endpos","numreads_end_LL","covbases_end_LL")
+colnames(dup_coverage_start_LF) <- c("rname","startpos","endpos","numreads_start_LF","covbases_start_LF")
+colnames(dup_coverage_end_LF) <- c("rname","startpos","endpos","numreads_end_LF","covbases_end_LF")
+
+dup_save_bis <- merge(dup_save, dup_coverage_start_LL, by.x=c("scaffold","start_event","start_event_bis"),
+                      by.y=c("rname","startpos","endpos"), all.x=T, all.y=F)
+dup_save_bis <- merge(dup_save_bis, dup_coverage_end_LL, by.x=c("scaffold","end_event_bis","end_event"),
+                      by.y=c("rname","startpos","endpos"), all.x=T, all.y=F)
+dup_save_bis <- merge(dup_save_bis, dup_coverage_start_LF,
+                      by.x=c("scaffold","start_event","start_event_bis"),
+                      by.y=c("rname","startpos","endpos"), all.x=T, all.y=F)
+dup_save_bis <- merge(dup_save_bis, dup_coverage_end_LF, by.x=c("scaffold","end_event_bis","end_event"),
+                      by.y=c("rname","startpos","endpos"), all.x=T, all.y=F)
+library(dplyr)
+dup_save_bis <- distinct(dup_save_bis)
+
+dup_save_bis$cov_junction_LL <- (dup_save_bis$numreads_start_LL+dup_save_bis$numreads_end_LL)/2
+dup_save_bis$cov_junction_LF <- (dup_save_bis$numreads_start_LF+dup_save_bis$numreads_end_LF)/2
+
+dup_save_bis$freqLL <- dup_save_bis$NormReadsPool1/dup_save_bis$cov_junction_LL # change with non-norm
+dup_save_bis$freqLF <- dup_save_bis$NormReadsPool2/dup_save_bis$cov_junction_LF # change with non-norm
+
+summary(dup_save_bis$freqLL)
+summary(dup_save_bis$freqLF)
+
+# SECOND METHOD - NOT USING SAMTOOLS COMPUTATION ON JUNCTIONS
+# Then to compute the mean read depth
+#dup_save$MeanDepth1 <- (dup_save$ReadDepthPool1/dup_save$SizePool1*150)*2
+#dup_save$MeanDepth2 <- (dup_save$ReadDepthPool2/dup_save$SizePool1*150)*2
+
+# Compute the frequencies
+#dup_save$freqLL <- dup_save$NormReadsPool1/dup_save$MeanDepth1
+#dup_save$freqLF <- dup_save$NormReadsPool2/dup_save$MeanDepth2
+#dup_save_bis <- dup_save
+
+# And finally, using the frequencies, compute the FST for each set of allelic frequencies
+dup_save_bis$var <- 1/2*(dup_save_bis$freqLL^2+dup_save_bis$freqLF^2) -
+  ((dup_save_bis$freqLL+dup_save_bis$freqLF)/2)^2
+dup_save_bis$Fst <- dup_save_bis$var /
+  ((dup_save_bis$freqLL+dup_save_bis$freqLF)/2 * (1-(dup_save_bis$freqLL+dup_save_bis$freqLF)/2))
+
+hist(dup_save_bis$Fst, breaks=100)
+max(dup_save_bis$Fst, na.rm=T) # 5.517041
+View(dup_save_bis)
+
+summary(as.factor(dup_save_bis$Type)) # only dupB if we do DiffSupIns threshold
+summary(as.factor(dup_save_bis$TypeDup)) # only dupB if we do DiffSupIns threshold
+summary(as.factor(dup_save_bis$extra)) # only dupB if we do DiffSupIns threshold
+
+library(xlsx)
+write.xlsx(dup_save_bis, file="dup_save_withcov.xls", 
+           row.names = F)
+```
+
+After computing the Fst, compute informations about frequencies:
+
+```{r}
+library(xlsx)
+dup_save_bis <- read.xlsx(file="dup_save_withcov.xls", sheetName = "Sheet1")
+
+# Create a column with the information about frequency
+dup_save_bis$fq_info <- NA
+
+dup_save_bis$fq_info[dup_save_bis$freqLL==0 
+                     & dup_save_bis$Type=="everted"] <- "spe_LF_duptand" 
+# avec dup_save_bis$extra=="DUP_INV" : 556
+dup_save_bis$fq_info[dup_save_bis$freqLF==0 
+             & dup_save_bis$Type=="everted"] <- "spe_LL_duptand" # 3
+dup_save_bis$fq_info[dup_save_bis$freqLF!=0 & dup_save_bis$freqLL!=0
+             & dup_save_bis$freqLF>dup_save_bis$freqLL
+             & dup_save_bis$Type=="everted"] <- "LF_sup_duptand" # 1306
+dup_save_bis$fq_info[dup_save_bis$freqLF!=0 & dup_save_bis$freqLL!=0
+             & dup_save_bis$freqLF<dup_save_bis$freqLL
+             & dup_save_bis$Type=="everted"] <- "LL_sup_duptand" # 204
+dup_save_bis$fq_info[dup_save_bis$freqLF!=0 & dup_save_bis$freqLL!=0
+             & dup_save_bis$freqLF==dup_save_bis$freqLL
+             & dup_save_bis$Type=="everted"] <- "same_fq_duptand" # 2
+
+dim(dup_save_bis[dup_save_bis$Type=="everted",]) # 3725
+
+dup_save_bis$fq_info[dup_save_bis$freqLL==0 
+                     & dup_save_bis$Type=="inverted"] <- "spe_LF_dupinv" # 685
+dup_save_bis$fq_info[dup_save_bis$freqLF==0 
+                     & dup_save_bis$Type=="inverted"] <- "spe_LL_dupinv" # 4
+dup_save_bis$fq_info[dup_save_bis$freqLF!=0 & dup_save_bis$freqLL!=0
+                     & dup_save_bis$freqLF>dup_save_bis$freqLL
+                     & dup_save_bis$Type=="inverted"] <- "LF_sup_dupinv" # 1936
+dup_save_bis$fq_info[dup_save_bis$freqLF!=0 & dup_save_bis$freqLL!=0
+                     & dup_save_bis$freqLF<dup_save_bis$freqLL
+                     & dup_save_bis$Type=="inverted"] <- "LL_sup_dupinv" # 255
+dup_save_bis$fq_info[dup_save_bis$freqLF!=0 & dup_save_bis$freqLL!=0
+                     & dup_save_bis$freqLF==dup_save_bis$freqLL
+                     & dup_save_bis$Type=="inverted"] <- "same_fq_dupinv" # 4
+
+dim(dup_save_bis[dup_save_bis$Type=="inverted",]) # 5122
+
+# Create a column with the information about frequency
+
+dup_save_bis$readratio_info <- NA
+
+dup_save_bis$readratio_info[dup_save_bis$ReadDepthRatio > dup_save_bis$LowerThreshold 
+                         | dup_save_bis$ReadDepthRatio < dup_save_bis$UpperThreshold] <- "between"
+dup_save_bis$readratio_info[dup_save_bis$ReadDepthRatio > dup_save_bis$UpperThreshold] <- "up"
+dup_save_bis$readratio_info[dup_save_bis$ReadDepthRatio < dup_save_bis$LowerThreshold] <- "low"
+
+summary(as.factor(dup_save_bis$readratio_info)) 
+# between  low  up 
+# 7112     986  749
+
+p <- ggplot(dup_save_bis, aes(as.factor(fq_info), fill=readratio_info)) +
+  geom_bar(stat="count", color="black", position=position_dodge())+
+  geom_text(aes(label=..count..), stat="count", vjust=0)
+print(p)
+# Graphique fini
+p + labs(x="Frequency information", y = "Number of events")+
+  theme_classic()
+
+# Probleme : "FP" labelled si cov >0 !!! pas normalisé...
+# We then can try with other thresholds: q25/75
+q25 <- read.xlsx(file="quantiles_25.xlsx", sheetName = "Feuil1")
+dup_save_bis <- merge(dup_save_bis, q25, by="SizeClass")
+dup_save_bis$q25 <- as.numeric(as.character(dup_save_bis$q25))
+dup_save_bis$q75 <- as.numeric(as.character(dup_save_bis$q75))
+
+inv_bis <- dup_save_bis[dup_save_bis$Type=="inverted" &
+                          dup_save_bis$freqLF>dup_save_bis$freqLL & 
+                          dup_save_bis$ReadDepthRatio>dup_save_bis$q25 &
+                          dup_save_bis$ReadDepthRatio<dup_save_bis$q75,] # 1 405
+inv_bis$TypeEvent <- "inversion"
+
+dup_inv_bis <- dup_save_bis[dup_save_bis$Type=="inverted" &
+                              dup_save_bis$freqLF>dup_save_bis$freqLL & 
+                              dup_save_bis$ReadDepthRatio<dup_save_bis$q25,] # 692
+dup_inv_bis$TypeEvent <- "inverted_dup"
+
+dup_tand_bis <- dup_save_bis[dup_save_bis$Type=="everted" &
+                               dup_save_bis$freqLF>dup_save_bis$freqLL &
+                               dup_save_bis$ReadDepthRatio<dup_save_bis$q25,] # 538
+dup_tand_bis$TypeEvent <- "tandem_dup"
+
+quantile(inv_bis$Fst, na.rm=T, probs = 0.90) # 90% = 0.0396994
+quantile(dup_inv_bis$Fst, na.rm=T, probs = 0.90) # 90% = 0.04014379
+quantile(dup_tand_bis$Fst, na.rm=T, probs = 0.90) # 90% = 0.03636364
+
+# compute empirical pval en FST
+n=dim(inv_bis)[1]
+library(dplyr)
+inv_bis = inv_bis %>% arrange(desc(Fst)) 
+inv_bis$Fst_pval=rep(1,n)
+# calculer cb de valeurs sont plus petites que celle la
+inv_bis$Fst_pval = (1:n)/n 
+
+n=dim(dup_inv_bis)[1]
+dup_inv_bis = dup_inv_bis %>% arrange(desc(Fst)) 
+dup_inv_bis$Fst_pval=rep(1,n)
+# calculer cb de valeurs sont plus petites que celle la
+dup_inv_bis$Fst_pval = (1:n)/n 
+View(dup_inv_bis)
+
+all_clean <- rbind(dup_inv_bis,dup_tand_bis)
+all_clean <- rbind(all_clean,inv_bis)
+all_clean$fq_info <- substring(all_clean$fq_info, 1,6)
+all_clean <- all_clean[all_clean$scaffold!="NA",]
+
+# Add linkage groups
+library(xlsx)
+LG <- read.xlsx(file="scaff_LG_170122.xls", sheetName = "Sheet1",
+                header = T)
+LG$scaffold <- paste0(LG$seqid, ".1")
+
+all_clean <- merge(all_clean, LG[,c(4,6)], 
+                 by=c("scaffold"), all.x = T)
+
+library(ggplot2)
+p <- ggplot(all_clean, aes(as.factor(fq_info), fill=TypeEvent)) +
+  geom_bar(stat="count", color="black", position=position_dodge())+
+  geom_text(aes(label=..count..), stat="count", vjust=0)
+print(p)
+# Graphique fini
+p+labs(x="Frequency information", y = "Number of events")+
+  theme_classic()
+```
+
+Are reads delineating those events falling inside TE positions ? So could it be false positives events ?
+
+```{r}
+blast_TE=read.csv("results-blast-TE.txt", header=F, sep="\t") # 466,713
+colnames(blast_TE) <- c("id_query","id_target","sq_identity","alignment_length",
+                        "nb_mismatches","nb_gap_openings","domain_start_query",
+                        "domain_end_query","domain_start_target",
+                        "domain_end_target","evalue","bit_score")
+blast_TE <- blast_TE[blast_TE$sq_identity > 0.8,] # 379,736
+head(blast_TE) # we need id_target, domain_start_target, domain_end_target
+blast_TE <- blast_TE[,c(2,9,10)]
+
+# check in this table: how many events from scaffolds enriched in SVs AND in TE ?
+# with at least 100 bp of overlap on intervals
+
+library(GenomicRanges)
+library(IRanges)
+ranges_TE <- GRanges(seqnames=blast_TE$id_target, 
+                     ranges=IRanges(blast_TE$domain_start_target, blast_TE$domain_end_target))
+ranges_SV_start <-GRanges(seqnames=all_clean$scaffold, 
+                     ranges=IRanges(all_clean$start_event, all_clean$start_event_bis))
+ranges_SV_end <-GRanges(seqnames=all_clean$scaffold, 
+                        ranges=IRanges(all_clean$end_event_bis, all_clean$end_event))
+
+ranges_common_start <- subsetByOverlaps(ranges_SV_start, ranges_TE, minoverlap=100) # 393
+length(ranges_common_start)
+ranges_common_end <- subsetByOverlaps(ranges_SV_end, ranges_TE, minoverlap=100) # 414
+length(ranges_common_end)
+
+ranges_SV_start <- as.data.frame(ranges_SV_start)
+ranges_common_start <- as.data.frame(ranges_common_start)
+ranges_SV_start_sub <- all_clean[paste0(all_clean$scaffold, all_clean$start_event) 
+                                 %in% paste0(ranges_common_start$seqnames, ranges_common_start$start),] # 393
+
+ranges_SV_end <- as.data.frame(ranges_SV_end)
+ranges_common_end <- as.data.frame(ranges_common_end)
+ranges_SV_end_sub <- all_clean[paste0(all_clean$scaffold, all_clean$end_event_bis) 
+                               %in% paste0(ranges_common_end$seqnames, ranges_common_end$start),] # 414
+
+ranges_common_both <- ranges_SV_start_sub[ranges_SV_start_sub$Coords %in% ranges_SV_end_sub$Coords,] # 138
+dim(ranges_common_both) # 138
+View(ranges_common_both)
+
+all_clean <- all_clean[!(all_clean$Coords %in% ranges_common_both$Coords),] # 2 497
+
+library(plyr)
+count(as.factor(all_clean$TypeEvent))
+# inversion	= 1338			
+# inverted_dup	= 650			
+# tandem_dup = 509	
+
+write.xlsx(all_clean, file="all_clean.xls", 
+           row.names = F)
+
+all_clean$freqLF[all_clean$freqLF>1] <- 1
+all_clean$freqLL[all_clean$freqLL>1] <- 1
+```
+
+
+```{r}
+# Find whether some events fall within genes
+library(xlsx)
+merge_gff <- read.xlsx(file="merge_gff.xlsx", sheetName = "Sheet1")
+annot_R <- read.xlsx2(file="annotation_bedbug_221121.xls",
+                      sheetName = "insecticide_resistance_100122")
+merge_gff <- merge(merge_gff, annot_R[,c(1,7)], by="Name", all.x=T)
+
+all_clean <- read.xlsx(file="all_clean.xls", sheetName = "Sheet1") 
+test <- all_clean[all_clean$scaffold=="NW_019392721.1" |
+                    all_clean$scaffold=="NW_019392763.1" |
+                    all_clean$scaffold=="NW_019942502.1",]
+View(test)
+
+final_dup <- merge(all_clean, merge_gff, by.x="scaffold", by.y="seqid", all.x = T) # 142 480
+colnames(final_dup)[46] <- "start_gene"
+colnames(final_dup)[47] <- "end_gene"
+
+final_dup$start_event <- as.numeric(as.character(final_dup$start_event))
+final_dup$end_event <- as.numeric(as.character(final_dup$end_event))
+
+# Then, we want to select lines where genes and events are overlapping
+
+sub_dup <- final_dup[(final_dup$start_event-1000 < final_dup$start_gene &
+                       final_dup$end_event+1000 > final_dup$end_gene),] # 1kb around events: 7 457 events in genes 
+sub_dup <- sub_dup[!is.na(sub_dup$TypeDup),] # 7 426
+length(unique(sub_dup$Name)) # 4118 genes
+
+summary(as.factor(sub_dup$fq_info))
+# sub_dup <- sub_dup[,c(1,9,11,33:36,38,43:49)] 
+
+library(xlsx)
+write.xlsx(sub_dup, file="sub_dup.xls", row.names = F) 
+
+### Load now
+sub_dup <- read.xlsx(file="sub_dup.xls", sheetName = "Sheet1") 
+
+length(unique(sub_dup$Name)) # 4118 genes BUT a single gene could be in different TypeEvent
+
+sub_dup_outliers <- sub_dup[((sub_dup$TypeEvent=="inversion" & sub_dup$Fst>=0.0396994) |
+          (sub_dup$TypeEvent=="inverted_dup" & sub_dup$Fst>0.04014379) |
+          (sub_dup$TypeEvent=="tandem_dup" & sub_dup$Fst>0.03636364)),]
+```
+
+Then, we want to extract only resistance genes:
+
+```{r}
+resist_dup <- sub_dup[!is.na(sub_dup$category),] # 255
+summary(as.factor(resist_dup$TypeEvent))
+# inversion inverted_dup   tandem_dup 
+#       134           86           35 
+         
+p <- ggplot(resist_dup, aes(as.factor(fq_info), fill=TypeEvent)) +
+  geom_bar(stat="count", color="black", position=position_dodge())+
+  geom_text(aes(label=..count..), stat="count", vjust=0)
+print(p)
+p+labs(x="Frequency information", y = "Number of events")+
+  theme_classic()
+
+dim(resist_dup)[1] # 255
+length(unique(resist_dup$Coords)) # 143 events in resistance genes
+length(unique(resist_dup$Name)) # 130 genes
+
+### SAVE ###
+library(xlsx)
+write.xlsx(resist_dup, file="resist_dup.xls", row.names = F) 
+############
+
+resist_dup <- read.xlsx(file="resist_dup.xls", sheetName = "Sheet1")
+View(resist_dup) 
+
+# We want to subset resist_dup according to scaffolds overexpressed
+# NW_019392665.1 dup_inverted or dup_tandem or inversion
+# NW_019392673.1 inversion
+# NW_019392686.1 inversion
+# NW_019392721.1 inversion or dup_inverted
+# NW_019392754.1 dup_inverted or dup_tandem
+# NW_019392785.1 inversion
+# NW_019392813.1 inversion
+
+resist_dup_scaffover <- resist_dup[
+  resist_dup$scaffold=="NW_019392665.1" & (resist_dup$TypeEvent=="inversion" | resist_dup$TypeEvent=="inverted_dup" | resist_dup$TypeEvent=="tandem_dup") |
+  resist_dup$scaffold=="NW_019392673.1" & resist_dup$TypeEvent=="inversion" |
+  resist_dup$scaffold=="NW_019392686.1" & resist_dup$TypeEvent=="inversion" |
+  resist_dup$scaffold=="NW_019392721.1" & (resist_dup$TypeEvent=="inversion"  | resist_dup$TypeEvent=="inverted_dup") |
+  resist_dup$scaffold=="NW_019392754.1" & (resist_dup$TypeEvent=="inverted_dup" | resist_dup$TypeEvent=="tandem_dup") |
+  resist_dup$scaffold=="NW_019392785.1" & resist_dup$TypeEvent=="inversion" |
+  resist_dup$scaffold=="NW_019392813.1" & resist_dup$TypeEvent=="inversion",]
+# 64 obs
+View(resist_dup_scaffover)
+
+# Then, we want to know how many of each event type fall in R genes
+resist_dup_scaffover <- resist_dup_scaffover[,c(1,43:45,48)]
+
+resist_dup_scaffover <- resist_dup_scaffover %>% 
+  group_by(scaffold,TypeEvent,LG,Name,product) %>% 
+  dplyr::summarize(count = n())
+
+library(dplyr)
+length(unique(resist_dup_scaffover$Name)) # 16 genes
+resist_dup_scaffover <- as.data.frame(resist_dup_scaffover)
+
+library(xlsx)
+write.xlsx(resist_dup_scaffover, file="scaffxtrem_resist.xls")
+
+resist_inv <- resist_dup[resist_dup$TypeEvent=="inversion",] # 134
+length(unique(resist_inv$Name)) # 80 events
+
+resist_dup_inv <- resist_dup[resist_dup$TypeEvent=="inverted_dup",] # 86
+length(unique(resist_dup_inv$Name)) # 50 events
+
+resist_dup_tand <-resist_dup[resist_dup$TypeEvent=="tandem_dup",] # 24
+length(unique(resist_dup_tand$Name)) # 30 events
+
+# Then filter on FST
+resist_dup_tand <- resist_dup_tand[resist_dup_tand$Fst>=0.03636364,] # 0 obs
+resist_dup_inv <- resist_dup_inv[resist_dup_inv$Fst>=0.04014379,] # 9 obs
+resist_inv <- resist_inv[resist_inv$Fst>=0.0396994,] # 10 obs
+
+outliers_resist <- rbind(resist_dup_inv, resist_dup_tand)
+outliers_resist <- rbind(outliers_resist, resist_inv)
+
+write.xlsx(outliers_resist, file="outliers_resist.xls")
+View(outliers_resist)
+length(unique(resist_dup$Coords)) # 143 events
+length(unique(resist_dup$Name)) # 130 genes
+
+
+resist_dup_LG <-  resist_dup[!is.na(resist_dup$LG),] # 160
+resist_dup_LG11 <-  resist_dup_LG[resist_dup_LG$LG==11,] # 38
+
+all_clean_LG <-  all_clean[!is.na(all_clean$LG),]
+all_clean_LG11 <-  all_clean_LG[all_clean_LG$LG==11,] # 117
+all_clean_scaff2721 <-  all_clean_LG11[all_clean_LG11$scaffold=="NW_019392721.1",] # 42
+
+library(plyr)
+as.factor(all_clean_scaff2721$TypeEvent)
+
+write.xlsx(resist_dup_LG11, file="resist_LG11.xls", row.names = F)
+```
+
+
+
+
 
 
 
