@@ -236,6 +236,8 @@ pooldata_sub <- pooldata.subset(pooldata, pool.index = c(1,2,3,4),
 
 ### Performing PCA
 
+Principal Component Analysis (PCA) was performed using R/pcadapt package v4.3.3 and “pool” type parameter (Privé et al., 2020). 
+
 ```
 # Build pcadapt matrix
 
@@ -285,7 +287,7 @@ plot(res, option = "scores", i = 1, j = 2, pop = poplist.names) # PC1 vs PC2
 
 ### Computing FST
 
-For each SNP, we can compute SNP-specific pairwise FST for each comparisons between strains (GL_vs_LF, GL_vs_SF, GL_vs_LL, LF_vs_SF, LF_vs_LL, SF_vs_LL), thanks to the option "output.snp.values = TRUE": 
+For each SNP, we can compute SNP-specific pairwise FST for each comparisons between strains (GL_vs_LF, GL_vs_SF, GL_vs_LL, LF_vs_SF, LF_vs_LL, SF_vs_LL) using the package R/poolfstat and the option "output.snp.values = TRUE": 
 ``` 
 PairwiseFST_all = na.omit(compute.pairwiseFST(pooldata_sub, method = "Anova",
 					      min.cov.per.pool = -1, 
@@ -295,10 +297,9 @@ PairwiseFST_all = na.omit(compute.pairwiseFST(pooldata_sub, method = "Anova",
 # Warning : here, min.maf by pairs, not for the 4 strains together !
 
 head(PairwiseFST_all@values) # to build Table 2
-``` 
+```
 
-
-## Selecting candidate SNPs
+## Selecting outlier SNPs
 
 ### Differentiated FST
 
@@ -449,7 +450,7 @@ data$SF_p <- data$SF_ref/data$SF_tot
 
 ### Subsetting data on Minor Allele Frequency
 
-We used the BayPass software to estimate the nucleotide diversity "π" for each SNP (see [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes) to know how to run BayPass). With π, we were then able to compute "MAF", the minor allele frequency:
+We used the BayPass software to estimate the average frequency across all four populations "p" for each SNP (see [Selection with contrast between phenotypes](#Selection-with-contrast-between-phenotypes) to know how to run BayPass). With π, we were then able to compute "MAF", the minor allele frequency (as MAF = 0.5−|p−0.5). This relatively high MAF value was chosen in order to remove loci for which we have very limited power to detect any association with the resistance phenotype in the BayPass analysis. 
 
 ``` 
 pi=read.table("poolfstatdata_080422_summary_pi_xtx.out",header=T)
@@ -460,7 +461,7 @@ summary(pi$MAF) # Min 0.02142 - Max 0.5
 pi_sub <- pi[pi$MAF>0.2,]
 ``` 
 
-Subsetting our data on MAF>0.2 gave us 2,918,170 SNPs (without the mitochondrial scaffold).
+Subsetting our data on MAF>0.2 gave us 2,918,170 SNPs (without the mitochondrial scaffold) located on 990 scaffolds, and has been deposited on Dryad (doi.org/10.5061/dryad.9cnp5hqp6).
 
 ### Combining conditions
 
@@ -491,11 +492,398 @@ data$Colour[(data$BF.dB>5
              & data$LL_p>data$LF_p)
             ]="red"
 summary(as.factor(data$Colour))
-```
 
-By doing so, we detected 580 candidates.
+candidates <- subset(data, Colour=="black")
+```
+By doing so, we detected 576 candidates.
 
 ### Synonymous or not
+
+To see were are located those variants, we first import the gff file and build a db as implemented in the VariantAnnotation package.
+
+```{r}
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("VariantAnnotation")
+# BiocManager::install("GenomicFeatures")
+
+library(VariantAnnotation)
+library(GenomicFeatures)
+gtffile <- file.path("/your-path/GCF_000648675.2_Clec_2.1_genomic.gff") 
+txdb <- makeTxDbFromGFF(gtffile, format= "gff")
+fa = open(FaFile(file = "/your-path/GCF_000648675.2_Clec_2.1_genomic.fna"))
+# create index
+(idx <- scanFaIndex(fa))
+(dna <- scanFa(fa))
+```
+
+Then predict their location :
+
+```{r}
+# use variant annotation package to check the effect on proteins
+dim(candidates) # 576
+candidates$contig  <- paste(candidates$contig,".1", sep="")
+
+# for some reason, some contigs from the candidate table are not in the gff db.
+# although they are in the gff file itself...
+library(ape)
+gff=read.gff(gtffile)
+
+# comment.char = "", skip = 8, sep="\t", header = F, quote = "",
+# We have to remove them
+candidates2=subset(x = candidates,
+                   contig %in% seqlevels(txdb)) 
+dim(candidates2) # 56 387
+str(candidates2)
+
+# contigs removed :
+diff=setdiff(candidates$contig, candidates2$contig)
+length(diff) # 2
+# they are in the gff... but not in the db
+intersect(diff,gff$seqid)
+# when trying to access them in the ncbi genome browser it says:
+# "Exon Navigator: There are no genes in the region"
+# indeed no particular feature for these contigs in the gff:
+gff[gff$seqid %in% intersect(diff,gff$seqid),] # RefSeq region
+
+# make a GRanges object
+gr=GRanges(seqnames=candidates2$contig,
+            ranges=IRanges(start=candidates2$position,
+                           end=candidates2$position))
+
+# find location
+loc <- locateVariants(gr, txdb, AllVariants())
+
+# we can do the same with all snps 
+data$contig  <- paste0(data.2$contig, ".1")
+
+data_bis=subset(x = data,
+                   contig %in% seqlevels(txdb)) 
+data_bis <- data_bis[!is.na(data_bis$alt), ] # 2,880,574
+dim(data_bis)
+
+diff=setdiff(data$contig, data_bis$contig)
+
+gr2=GRanges(seqnames=data_bis$contig,
+            ranges=IRanges(start=data_bis$position,
+                           end=data_bis$position))
+# find location
+loc2 <- locateVariants(gr2, txdb, AllVariants())
+```
+
+Then predict their impact on protein sequences :
+
+```{r}
+# how many contigs
+length(unique(candidates2$contig)) # 129
+length(unique(data_bis$contig)) # 530
+
+# add alternative allele information to the genomic ranges object
+gr$alt=DNAStringSet(candidates2$alt)
+gr2$alt=DNAStringSet(data_bis$alt)
+
+# predict protein change in them
+length(gr) # 578
+length(gr2) # 2880574
+
+coding <- predictCoding(query = gr, txdb, 
+                        seqSource=fa, 
+                        varAllele = gr$alt)
+coding2 <- predictCoding(query = gr2, txdb, 
+                        seqSource=fa, 
+                        varAllele = gr2$alt)
+
+coding = as.data.frame(coding) # 39
+coding2 = as.data.frame(coding2) # 85,311 
+```
+
+Merge all information in a table
+
+```{r}
+final_London_table=candidates2
+final_London_table$QUERYID=1:length(candidates2$contig)
+gr$QUERYID=1:length(gr)
+loc$QUERYID
+
+# merge with genomic location
+final_London_table2=merge(final_London_table, loc, by.x=c("QUERYID","contig"),
+                          by.y=c("QUERYID","seqnames"), all.x=T, all.y=T)
+
+final_London_table2 <- final_London_table2[,c("QUERYID","contig","position","M_P","LOG_C2","MAF","BF.dB",
+                                              "ref","alt","LL_p","LF_p","Fst_LLLF_pval","C2_pval","lfdr_C2",
+                                              "Colour","start","end","LOCATION","GENEID","PRECEDEID","FOLLOWID")]
+# remove duplicated lines
+library(dplyr)
+final_London_table2 = final_London_table2 %>% distinct()
+head(final_London_table2)
+
+# merge with effect on proteins
+if(dim(coding)[1]>0){
+  final_London_table2=merge (final_London_table2,
+                             coding[,c("QUERYID", "strand", "CDSLOC.start","PROTEINLOC",
+                                       "CDSID", "GENEID", "CONSEQUENCE", "REFCODON",
+                                       "VARCODON","REFAA", "VARAA")], by="QUERYID",
+                             all.x=TRUE, all.y=TRUE)
+  # remove duplicated lines
+  final_London_table2 = final_London_table2 %>% distinct()
+}
+```
+
+Add the distance to nearest gene
+
+```{r}
+# subset gff information to genes
+gff_GR_genes=genes(txdb, single.strand.genes.only=FALSE)
+gff_GR_genes=unlist(gff_GR_genes)
+
+# distance to nearest gene
+distanceToNearest=distanceToNearest(x=gr, subject=gff_GR_genes, ignore.strand=TRUE)
+
+# identity of the hits:
+nearest_gene_names=names(gff_GR_genes[subjectHits(distanceToNearest)])
+gr$distance_to_nearest_gene=as.data.frame(distanceToNearest)$distance
+gr$nearest_gene_names=nearest_gene_names
+
+# append to the table 
+final_London_table4=merge (final_London_table2, 
+                           gr[,c("QUERYID","distance_to_nearest_gene","nearest_gene_names")],
+                           by="QUERYID", all.x=TRUE, all.y=TRUE)
+
+# finally add annotation to nearest genes
+gff_mRNA=subset(gff, 
+                 type=="mRNA")
+
+head(final_London_table4)
+
+library("RColorBrewer")
+barplot(table(final_London_table4$LOCATION), las=3, col=brewer.pal(n = 7, name = "Paired"))
+
+# on enleve intergenic et intron
+set_final = which(final_London_table4$LOCATION != "intergenic" &
+                    final_London_table4$LOCATION != "intron") # 5 151
+
+final_London_table4 <- as.data.frame(final_London_table4)
+head(final_London_table4)
+
+final_London_table4.1 = final_London_table4[unique(c(set_final)),]
+
+# ou pas
+library(tidyverse)
+final_London_table4.1 <- final_London_table4 %>% distinct()
+
+final_London_table4.1$annotation=NA
+# trop long :
+# for (i in 1:dim(final_London_table4.1)[1]){
+#  locus=final_London_table4.1[i,"nearest_gene_names"]
+#  annot=grep(pattern = locus, x = gff_mRNA$attributes, value = TRUE)[1]
+#  annot=strsplit(annot, "product=")
+#  annot=strsplit(annot[[1]][2], split=";", fixed=TRUE)[[1]][1]
+#  final_London_table4.1$annotation[i]=annot
+#}
+# gff_mRNA > recup info gene="" > dans une colonne
+# garder 1 ligne/n°gene
+# merge sur colonne gene=""
+
+final_London_table4.1 <- merge(final_London_table4.1, merge_gff[,c("seqid","Name","product")],
+                               by.x=c("contig","nearest_gene_names"), by.y=c("seqid","Name"), 
+                               all.x=T, all.y=F)
+
+final_London_table4.1[final_London_table4.1=="NA"]="<NA>"
+final_4.2 <- as.data.frame(final_London_table4.1)
+
+cols = c("start.x","end.x","width.x","seqnames.y","strand.x","seqnames.x","start.x","end.x")
+final_4.2 = final_4.2[,!(names(final_4.2) %in% cols)]
+
+set_coding = which(final_4.2$LOCATION==c("coding"))
+final_4.2_coding = final_4.2[unique(c(set_coding)),] # 25
+```
+
+Based on a QTL RAD-seq analysis, Fountain et al. (2016) constructed a genetic map for C. lectularius assembly Clec_1.0. Nevertheless, the genome assembly of C. lectularius has been updated in the meantime (v1.0 to 2.1). In order to improve the genetic map produced, we decided to use Fountain's RAD-seq data and R scripts to generate a genetic map based on the latest genome assembly. In order to assemble scaffolds into putative autosomes, hereafter called linkage groups (LG), we re-aligned Fountain's RAD sequencing tags (available here https://doi.org/10.5061/dryad.d4r50) with GSNAP version 2020-06-01 on the RefSeq genome version 2.1, rather than version 1.0 used by Fountain. By following the same pipeline, we were able to keep 338 out of 441 RAD markers, distributed over 14 linkage groups, as in Fountain analysis. Finally, out of 1573 nuclear scaffolds, 151 were kept, as containing uniquely mapped markers. The 14 putative autosomes obtained had an overall similar gene content as in Fountain et al. (2016) (Figure S6). While Fountain managed to map >65% of the genome on linkage groups, we only obtained 46% (i.e. 234.7 Mb out of 510 Mb). One explanation could reside in the higher fragmentation of the new genome version. Indeed, the latest version of the genome was split into more scaffolds (Clec_1.0: 1402 scaffolds, Clec_2.1: 1574 scaffolds – see https://www.ncbi.nlm.nih.gov/genome/annotation_euk/Cimex_lectularius/101/). RAD markers therefore potentially fall into smaller scaffolds, which can lead to this loss of information.
+
+You can then download the produced file containing the connection between scaffolds and LG: **scaff_LG.xls**.
+
+We also defined 10 categories of genes potentially involved in resistance, similars to what was done by Faucon et al. (2015), and benefiting from the extensive literature on the topic in several insects. Six of them corresponded to metabolic resistance: “Binding/Sequestration” (6 genes), “GST” (14), “CCE” (39), “UDPGT” (39), “ABC transporter/MRP” (55), and “P450” (56). The category “Other detox” (64) includes transcription factors, which could modulate detoxification enzyme expressions (Amezian et al., 2021). While “Cuticle” (113 genes) encompasses cuticular resistance genes, “Insecticide target and nervous system” (31) covers all the targets of the different insecticide families, as well as genes that could contribute to maintain neurological activity. Finally, bed bugs being hematophageous insects, they are subject to oxydative stress after a blood meal, and therefore adapted to deal with this stress. This feature could be advantageous for their defense against oxidative stress caused by pyrethroid exposure (Wang, 2016). We thus defined a “Redox homeostasis” category (14 genes). Based on gene annotation extracted from the GFF3 file (GCF_000648675.2), 431 out of the 13,208 genes (without tRNA and mitochondrial scaffold) were assigned to one of these categories.
+
+This file must be downloaded from the Supplementary material of the related paper: https://onlinelibrary.wiley.com/action/downloadSupplement?doi=10.1111%2Feva.13550&file=eva13550-sup-0002-TableS1.xlsx
+
+Finally, one can add Linkage group & Resistance genes informations:
+
+```{r}
+library(xlsx)
+tab_corresp_LG <- read.xlsx(file="scaff_LG.xls", sheetName = "Sheet1",
+                            header = T)
+tab_corresp_LG <- tab_corresp_LG[,c("seqid","LG")]
+tab_corresp_LG$seqid <- paste0(tab_corresp_LG$seqid, ".1")
+
+final_4.2_LG <- merge(final_4.2, tab_corresp_LG, by.x="contig", by.y="seqid", all.x=T, all.y=F)
+
+# resistance
+annot_R <- read.xlsx2(file="eva13550-sup-0002-tables1.xls",
+                      sheetName = "supplementary_table_3")
+
+final_4.2_LG_res <- merge(final_4.2_LG,annot_R[,c("Gene name","Scaffold","Resistance mechanism category","Product")],
+                     all.x=T, all.y=F, 
+                     by.x=c("contig","nearest_gene_names"), by.y=c("seqid","Name"))
+
+head(final_4.2_LG_res) # remove some columns
+
+final_4.2_LG_res <- final_4.2_LG_res[,c("contig","nearest_gene_names","position","M_P","LOG_C2","MAF","BF.dB",
+                                        "ref","alt","LL_p","LF_p","Fst_LLLF_pval","C2_pval","lfdr_C2",
+                                        "Colour","LOCATION","CONSEQUENCE","distance_to_nearest_gene", 
+                                        "product.x","LG","category","product.y")]
+final_4.2_LG_res <- final_4.2_LG_res %>% distinct() # 3 061 755
+
+write.csv(final_4.2_LG_res, file = "~/Desktop/all_snps_100522.csv", quote = F, row.names = F)
+
+all_snps <- read.csv2("~/Desktop/all_snps_100522.csv", sep=",")
+
+# count non syn
+
+set_nonsyn = which(final_4.2$CONSEQUENCE==c("nonsynonymous"))
+final_4.2_nonsyn = final_4.2[unique(c(set_nonsyn)),] # 19 401
+
+final_4.2_nonsyn <- final_4.2_nonsyn[,c("contig","nearest_gene_names","position","Colour",
+                                        "LOCATION","CONSEQUENCE","product")]
+final_4.2_nonsyn <- final_4.2_nonsyn %>% distinct() # 13 172
+
+final_4.2_nonsyn <- final_4.2_nonsyn %>%
+  group_by(contig, position, Colour, CONSEQUENCE, nearest_gene_names,product) %>%
+  summarise(LOCATION = paste(LOCATION, collapse = "|")) # 10 318
+
+
+# all data
+# see lines below > data_nt <- read.table("~/Documents/Cluster/data_all_clean.txt", sep="\t", header=T)
+
+data_LG <- data_nt[data_nt$contig %in% tab_corresp_LG$seqid, ] # 1 430 430 -> garde seulement lignes avec scaffolds compris dans la table corresp
+tab_corresp_LG <- tab_corresp_LG[,c(1,2)]
+colnames(tab_corresp_LG) <- c("contig","LG")
+
+data_LG$Colour="black"
+data_LG$Colour[(data_LG$BF.dB>5 
+                & data_LG$lfdr_C2<0.2
+                & data_LG$Fst_LLLF_pval<0.05
+                & data_LG$LL_p>data_LG$LF_p)]="red"
+
+summary(as.factor(data_LG$Colour)) # 259 candidates : OK
+data_LG <- merge(data_LG, tab_corresp_LG, by="contig")
+data_LG <- data_LG %>% arrange(Colour)
+
+chr1 <- subset(data_0.2_LG, LG == 1)
+summary(as.factor(chr1$Colour)) 
+
+chr2 <- subset(data_0.2_LG, LG == 2)
+summary(as.factor(chr2$Colour)) 
+
+chr3 <- subset(data_0.2_LG, LG == 3)
+summary(as.factor(chr3$Colour))
+
+chr4 <- subset(data_0.2_LG, LG == 4)
+summary(as.factor(chr4$Colour))
+
+chr5 <- subset(data_0.2_LG, LG == 5)
+summary(as.factor(chr5$Colour))
+
+chr6 <- subset(data_0.2_LG, LG == 6)
+summary(as.factor(chr6$Colour)) 
+
+chr7 <- subset(data_0.2_LG, LG == 7)
+summary(as.factor(chr7$Colour)) 
+
+chr8 <- subset(data_0.2_LG, LG == 8)
+summary(as.factor(chr8$Colour)) 
+
+chr9 <- subset(data_0.2_LG, LG == 9)
+summary(as.factor(chr9$Colour)) 
+
+chr10 <- subset(data_0.2_LG, LG == 10)
+summary(as.factor(chr10$Colour))
+
+chr11 <- subset(data_0.2_LG, LG == 11)
+summary(as.factor(chr11$Colour)) 
+
+chr12 <- subset(data_0.2_LG, LG == 12)
+summary(as.factor(chr12$Colour)) 
+
+chr13 <- subset(data_0.2_LG, LG == 13)
+summary(as.factor(chr13$Colour)) 
+
+chr14 <- subset(data_0.2_LG, LG == 14)
+summary(as.factor(chr14$Colour)) 
+
+# snps number by LG
+
+nb_cand <- c(14,32,32,3,11,8,23,25,2,5,93,0,9,2)
+nb_SNPs <- c(138804,166040,160231,175027,124713,80979,109031,59955,80061,78651,99800,80314,66725,9840)
+
+pourcentage_cand <- (nb_cand/(nb_SNPs+nb_cand))*100
+chr <- c("Chr 1","Chr 2","Chr 3","Chr 4","Chr 5","Chr 6","Chr 7",
+         "Chr 8","Chr 9","Chr 10","Chr 11","Chr 12","Chr 13","Chr 14")
+
+chr <- factor(chr, levels = chr)
+
+df2 <- data.frame(type=rep(c("candidates"), each=14),
+                chr=rep(chr),
+                nb=c(pourcentage_cand))
+
+library(ggplot2)
+ggplot(data=df2, aes(x=chr, y=nb, fill=type)) +
+  geom_bar(stat="identity")+
+  labs(x="Putative chromosome", 
+       y = "Percentage of candidates SNPs")
+
+# is it significative ?
+nb_SNPs_tot <- nb_cand+nb_SNPs
+m <- matrix(c(nb_cand,nb_SNPs_tot),nrow=14,
+            ncol=2,byrow=FALSE)
+test <- pairwise.prop.test(m, p.adjust.method = "bonferroni")
+# chr 11 signif diff of all other chr
+Sys.setenv(R_REMOTES_NO_ERRORS_FROM_WARNINGS = "true")
+#if (!require("remotes")) install.packages("remotes")
+#remotes::install_github("GegznaV/biostat")
+library(biostat)
+make_cld(test)
+
+# open a new script
+par(mfrow=c(3,5))
+
+plot(x=chr1$position,y=-log10(chr1$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 1", col=chr1$Colour)
+plot(x=chr2$position,y=-log10(chr2$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 2", col=chr2$Colour)
+plot(x=chr3$position,y=-log10(chr3$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 3", col=chr3$Colour)
+plot(x=chr4$position,y=-log10(chr4$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 4", col=chr4$Colour)
+plot(x=chr5$position,y=-log10(chr5$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 5", col=chr5$Colour)
+plot(x=chr6$position,y=-log10(chr6$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 6", col=chr6$Colour)
+plot(x=chr7$position,y=-log10(chr7$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 7", col=chr7$Colour)
+plot(x=chr8$position,y=-log10(chr8$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 8", col=chr8$Colour)
+plot(x=chr9$position,y=-log10(chr9$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 9", col=chr9$Colour)
+plot(x=chr10$position,y=-log10(chr10$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 10", col=chr10$Colour)
+plot(x=chr11$position,y=-log10(chr11$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 11", col=chr11$Colour)
+plot(x=chr12$position,y=-log10(chr12$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 12", col=chr12$Colour)
+plot(x=chr13$position,y=-log10(chr13$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 13", col=chr13$Colour)
+plot(x=chr14$position,y=-log10(chr14$Fst_LLLF_pval), ylab="", xlab="",
+     pch=20, cex=0.4, main="Chr 14", col=chr14$Colour)
+
+# add annotation infos
+all_candidates_080721 <- read.csv(file="~/Desktop/all_candidates_080721.csv", sep=";", header=TRUE)
+all_candidates_080721$contig <- substring(all_candidates_080721$contig,1,12)
+
+chr11_candidates <- all_candidates_080721[all_candidates_080721$contig %in% 
+                                   chr11$contig, ] # 2 734 664 -> garde seulement lignes avec scaffolds compris dans la table corresp
+
+View(chr11_candidates)
+```
 
 ## Detection of structural variants
 
