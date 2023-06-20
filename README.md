@@ -723,19 +723,17 @@ annot_R <- read.xlsx2(file="eva13550-sup-0002-tables1.xls",
 
 final_4.2_LG_res <- merge(final_4.2_LG,annot_R[,c("Gene name","Scaffold","Resistance mechanism category","Product")],
                      all.x=T, all.y=F, 
-                     by.x=c("contig","nearest_gene_names"), by.y=c("seqid","Name"))
+                     by.x=c("contig","nearest_gene_names"), by.y=c("Scaffold","Gene name"))
 
 head(final_4.2_LG_res) # remove some columns
 
 final_4.2_LG_res <- final_4.2_LG_res[,c("contig","nearest_gene_names","position","M_P","LOG_C2","MAF","BF.dB",
                                         "ref","alt","LL_p","LF_p","Fst_LLLF_pval","C2_pval","lfdr_C2",
                                         "Colour","LOCATION","CONSEQUENCE","distance_to_nearest_gene", 
-                                        "product.x","LG","category","product.y")]
+                                        "LG","Resistance mechanism category","Product")]
 final_4.2_LG_res <- final_4.2_LG_res %>% distinct() # 3 061 755
 
-write.csv(final_4.2_LG_res, file = "~/Desktop/all_snps_100522.csv", quote = F, row.names = F)
-
-all_snps <- read.csv2("~/Desktop/all_snps_100522.csv", sep=",")
+all_snps <- final_4.2_LG_res
 
 # count non syn
 
@@ -749,140 +747,6 @@ final_4.2_nonsyn <- final_4.2_nonsyn %>% distinct() # 13 172
 final_4.2_nonsyn <- final_4.2_nonsyn %>%
   group_by(contig, position, Colour, CONSEQUENCE, nearest_gene_names,product) %>%
   summarise(LOCATION = paste(LOCATION, collapse = "|")) # 10 318
-
-
-# all data
-# see lines below > data_nt <- read.table("~/Documents/Cluster/data_all_clean.txt", sep="\t", header=T)
-
-data_LG <- data_nt[data_nt$contig %in% tab_corresp_LG$seqid, ] # 1 430 430 -> garde seulement lignes avec scaffolds compris dans la table corresp
-tab_corresp_LG <- tab_corresp_LG[,c(1,2)]
-colnames(tab_corresp_LG) <- c("contig","LG")
-
-data_LG$Colour="black"
-data_LG$Colour[(data_LG$BF.dB>5 
-                & data_LG$lfdr_C2<0.2
-                & data_LG$Fst_LLLF_pval<0.05
-                & data_LG$LL_p>data_LG$LF_p)]="red"
-
-summary(as.factor(data_LG$Colour)) # 259 candidates : OK
-data_LG <- merge(data_LG, tab_corresp_LG, by="contig")
-data_LG <- data_LG %>% arrange(Colour)
-
-chr1 <- subset(data_0.2_LG, LG == 1)
-summary(as.factor(chr1$Colour)) 
-
-chr2 <- subset(data_0.2_LG, LG == 2)
-summary(as.factor(chr2$Colour)) 
-
-chr3 <- subset(data_0.2_LG, LG == 3)
-summary(as.factor(chr3$Colour))
-
-chr4 <- subset(data_0.2_LG, LG == 4)
-summary(as.factor(chr4$Colour))
-
-chr5 <- subset(data_0.2_LG, LG == 5)
-summary(as.factor(chr5$Colour))
-
-chr6 <- subset(data_0.2_LG, LG == 6)
-summary(as.factor(chr6$Colour)) 
-
-chr7 <- subset(data_0.2_LG, LG == 7)
-summary(as.factor(chr7$Colour)) 
-
-chr8 <- subset(data_0.2_LG, LG == 8)
-summary(as.factor(chr8$Colour)) 
-
-chr9 <- subset(data_0.2_LG, LG == 9)
-summary(as.factor(chr9$Colour)) 
-
-chr10 <- subset(data_0.2_LG, LG == 10)
-summary(as.factor(chr10$Colour))
-
-chr11 <- subset(data_0.2_LG, LG == 11)
-summary(as.factor(chr11$Colour)) 
-
-chr12 <- subset(data_0.2_LG, LG == 12)
-summary(as.factor(chr12$Colour)) 
-
-chr13 <- subset(data_0.2_LG, LG == 13)
-summary(as.factor(chr13$Colour)) 
-
-chr14 <- subset(data_0.2_LG, LG == 14)
-summary(as.factor(chr14$Colour)) 
-
-# snps number by LG
-
-nb_cand <- c(14,32,32,3,11,8,23,25,2,5,93,0,9,2)
-nb_SNPs <- c(138804,166040,160231,175027,124713,80979,109031,59955,80061,78651,99800,80314,66725,9840)
-
-pourcentage_cand <- (nb_cand/(nb_SNPs+nb_cand))*100
-chr <- c("Chr 1","Chr 2","Chr 3","Chr 4","Chr 5","Chr 6","Chr 7",
-         "Chr 8","Chr 9","Chr 10","Chr 11","Chr 12","Chr 13","Chr 14")
-
-chr <- factor(chr, levels = chr)
-
-df2 <- data.frame(type=rep(c("candidates"), each=14),
-                chr=rep(chr),
-                nb=c(pourcentage_cand))
-
-library(ggplot2)
-ggplot(data=df2, aes(x=chr, y=nb, fill=type)) +
-  geom_bar(stat="identity")+
-  labs(x="Putative chromosome", 
-       y = "Percentage of candidates SNPs")
-
-# is it significative ?
-nb_SNPs_tot <- nb_cand+nb_SNPs
-m <- matrix(c(nb_cand,nb_SNPs_tot),nrow=14,
-            ncol=2,byrow=FALSE)
-test <- pairwise.prop.test(m, p.adjust.method = "bonferroni")
-# chr 11 signif diff of all other chr
-Sys.setenv(R_REMOTES_NO_ERRORS_FROM_WARNINGS = "true")
-#if (!require("remotes")) install.packages("remotes")
-#remotes::install_github("GegznaV/biostat")
-library(biostat)
-make_cld(test)
-
-# open a new script
-par(mfrow=c(3,5))
-
-plot(x=chr1$position,y=-log10(chr1$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 1", col=chr1$Colour)
-plot(x=chr2$position,y=-log10(chr2$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 2", col=chr2$Colour)
-plot(x=chr3$position,y=-log10(chr3$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 3", col=chr3$Colour)
-plot(x=chr4$position,y=-log10(chr4$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 4", col=chr4$Colour)
-plot(x=chr5$position,y=-log10(chr5$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 5", col=chr5$Colour)
-plot(x=chr6$position,y=-log10(chr6$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 6", col=chr6$Colour)
-plot(x=chr7$position,y=-log10(chr7$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 7", col=chr7$Colour)
-plot(x=chr8$position,y=-log10(chr8$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 8", col=chr8$Colour)
-plot(x=chr9$position,y=-log10(chr9$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 9", col=chr9$Colour)
-plot(x=chr10$position,y=-log10(chr10$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 10", col=chr10$Colour)
-plot(x=chr11$position,y=-log10(chr11$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 11", col=chr11$Colour)
-plot(x=chr12$position,y=-log10(chr12$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 12", col=chr12$Colour)
-plot(x=chr13$position,y=-log10(chr13$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 13", col=chr13$Colour)
-plot(x=chr14$position,y=-log10(chr14$Fst_LLLF_pval), ylab="", xlab="",
-     pch=20, cex=0.4, main="Chr 14", col=chr14$Colour)
-
-# add annotation infos
-all_candidates_080721 <- read.csv(file="~/Desktop/all_candidates_080721.csv", sep=";", header=TRUE)
-all_candidates_080721$contig <- substring(all_candidates_080721$contig,1,12)
-
-chr11_candidates <- all_candidates_080721[all_candidates_080721$contig %in% 
-                                   chr11$contig, ] # 2 734 664 -> garde seulement lignes avec scaffolds compris dans la table corresp
-
-View(chr11_candidates)
 ```
 
 ## Detection of structural variants
