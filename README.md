@@ -749,6 +749,8 @@ final_4.2_nonsyn <- final_4.2_nonsyn %>%
   summarise(LOCATION = paste(LOCATION, collapse = "|")) # 10 318
 ```
 
+Now you have all the informations to plot the different parameters - FST, BayPass results... along the genome, separated with either scaffolds or LG. Enjoy!
+
 ## Detection of structural variants
 
 We aim to detect two types of structural variants (SVs), duplications and inversions. London Field population was compared to the susceptible reference genome, and to the susceptible London Lab population, in order to detect SVs that could have been selected and underlie the resistance phenotype.
