@@ -27,6 +27,7 @@ Contact: chloe.haberkorn@univ-lyon1.fr / chloehbk@gmail.com
 	- [Alternative alleles](#Alternative-alleles)
 	- [Combining conditions](#Combining-conditions)
 	- [Synonymous or not](#Synonymous-or-not)
+	- [Identifying LG and Resistance genes](#Identifying-LG-and-Resistance-genes)
 
  - **[Detection of structural variants](#Detection-of-structural-variants)**
 	- [Identify distant and everted read-pairs](#Identify-distant-and-everted-read-pairs)
@@ -171,7 +172,7 @@ We first compute coverage per base (i.e. number of reads mapping at a position o
 /your-path/Tools/Tools/bedtools2/bin/bedtools genomecov -ibam SF_mapped_sorted.bam -d > SF_basecov.txt
 ```
 
-We choose to exclude of our analysis coverage over 50, which corresponds to >95% quantile for all populations, in order to avoid bias due to very high coverage. We were then able to compute the coverage (X) for the 4 strains:
+We were then able to compute the coverage (X) for the 4 strains:
 
 ```
 awk '{ total += $3 } END { print total/NR }' SF_basecov.txt 
@@ -697,6 +698,8 @@ final_4.2 = final_4.2[,!(names(final_4.2) %in% cols)]
 set_coding = which(final_4.2$LOCATION==c("coding"))
 final_4.2_coding = final_4.2[unique(c(set_coding)),] # 25
 ```
+
+### Identifying LG and Resistance genes
 
 Based on a QTL RAD-seq analysis, Fountain et al. (2016) constructed a genetic map for C. lectularius assembly Clec_1.0. Nevertheless, the genome assembly of C. lectularius has been updated in the meantime (v1.0 to 2.1). In order to improve the genetic map produced, we decided to use Fountain's RAD-seq data and R scripts to generate a genetic map based on the latest genome assembly. In order to assemble scaffolds into putative autosomes, hereafter called linkage groups (LG), we re-aligned Fountain's RAD sequencing tags (available here https://doi.org/10.5061/dryad.d4r50) with GSNAP version 2020-06-01 on the RefSeq genome version 2.1, rather than version 1.0 used by Fountain. By following the same pipeline, we were able to keep 338 out of 441 RAD markers, distributed over 14 linkage groups, as in Fountain analysis. Finally, out of 1573 nuclear scaffolds, 151 were kept, as containing uniquely mapped markers. The 14 putative autosomes obtained had an overall similar gene content as in Fountain et al. (2016) (Figure S6). While Fountain managed to map >65% of the genome on linkage groups, we only obtained 46% (i.e. 234.7 Mb out of 510 Mb). One explanation could reside in the higher fragmentation of the new genome version. Indeed, the latest version of the genome was split into more scaffolds (Clec_1.0: 1402 scaffolds, Clec_2.1: 1574 scaffolds – see https://www.ncbi.nlm.nih.gov/genome/annotation_euk/Cimex_lectularius/101/). RAD markers therefore potentially fall into smaller scaffolds, which can lead to this loss of information.
 
