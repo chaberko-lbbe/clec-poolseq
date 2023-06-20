@@ -177,10 +177,7 @@ We were then able to compute the coverage (X) for the 4 strains:
 ```
 awk '{ total += $3 } END { print total/NR }' SF_basecov.txt 
 ```
-Coverage LL = 25.0468
-Coverage LF = 32.0371
-Coverage GL = 39.4606
-Coverage SF = 25.3821
+Coverage LL = 25.0468 ; Coverage LF = 32.0371 ; Coverage GL = 39.4606 ; Coverage SF = 25.3821
 
 ## Overall SNPs analyzes
 
