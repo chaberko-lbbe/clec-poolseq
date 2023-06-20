@@ -171,7 +171,7 @@ We first compute coverage per base (i.e. number of reads mapping at a position o
 /your-path/Tools/Tools/bedtools2/bin/bedtools genomecov -ibam SF_mapped_sorted.bam -d > SF_basecov.txt
 ```
 
-We choose to exclude of our analysis coverage over 50 bp, which corresponds to >95% quantile for all populations, in order to avoid bias due to very high coverage. We were then able to compute the coverage (X) for the 4 strains:
+We choose to exclude of our analysis coverage over 50, which corresponds to >95% quantile for all populations, in order to avoid bias due to very high coverage. We were then able to compute the coverage (X) for the 4 strains:
 
 ```
 awk '{ total += $3 } END { print total/NR }' SF_basecov.txt 
