@@ -257,7 +257,7 @@ fq_LL <- ref_LL/pooldata_sub@readcoverage[,4]
 pooldata_sub@snp.info[,1] <- substring(pooldata_sub@snp.info[,1],1,12)
 SNP <-paste(pooldata_sub@snp.info[,1],pooldata_sub@snp.info[,2] ,sep="_")
 
-mat_biall_poolfstat=matrix(nrow=4,ncol=length(pooldata_sub@snp.info))
+mat_biall_poolfstat=matrix(nrow=4,ncol=length(SNP))
 colnames(mat_biall_poolfstat) <- SNP
 rownames(mat_biall_poolfstat)=c("GL","LF","SF","LL")
 
